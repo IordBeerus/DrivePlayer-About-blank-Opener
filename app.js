@@ -283,6 +283,7 @@ function createCard(item, type) {
     const card = document.createElement('div');
     card.className = 'card';
     card.dataset.id = item.id;
+    const effType = (type === 'movie' || type === 'tv') ? type : (item.type || 'movie');
     const inList = myList.some(m => m.id === item.id);
     const genre = genArr(item.genre)[0] || 'action';
     let imgHTML = '';
@@ -291,7 +292,7 @@ function createCard(item, type) {
     }
     imgHTML += `<div class="card-placeholder" style="${item.poster ? 'display:none' : ''}">${defaultPosters[genre] || '🎬'}</div>`;
     card.innerHTML = `
-        <div class="card-badge">${type === 'tv' ? 'TV Show' : 'Movie'}</div>
+        <div class="card-badge">${effType === 'tv' ? 'TV Show' : 'Movie'}</div>
         ${imgHTML}
         <div class="card-actions">
             <button class="card-action-btn play-btn" data-action="play" title="Play">▶</button>
@@ -308,10 +309,10 @@ function createCard(item, type) {
     `;
     card.addEventListener('click', (e) => {
         const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
-        if (action === 'play') playItem(item, type);
-        else if (action === 'list') toggleMyList(item, type);
-        else if (action === 'info') showInfo(item, type);
-        else if (!action) showInfo(item, type);
+        if (action === 'play') playItem(item, effType);
+        else if (action === 'list') toggleMyList(item, effType);
+        else if (action === 'info') showInfo(item, effType);
+        else if (!action) showInfo(item, effType);
     });
     return card;
 }
@@ -442,7 +443,9 @@ function playEpisode(tvItem, episode, index) {
 
 // ==================== INFO MODAL ====================
 function showInfo(item, type) {
-    currentInfoItem = item;
+    type = (type === 'movie' || type === 'tv') ? type : (item.type || 'movie');
+    const sourceItem = resolveSourceItem(item, type);
+    currentInfoItem = sourceItem;
     currentInfoType = type;
     const modal = document.getElementById('infoModal');
     const backdrop = document.getElementById('infoBackdrop');
@@ -461,10 +464,10 @@ function showInfo(item, type) {
     document.getElementById('infoRating').textContent = item.rating ? '★ ' + item.rating : '';
     document.getElementById('infoGenre').textContent = gArr.map(g => g.charAt(0).toUpperCase() + g.slice(1)).join(', ');
     document.getElementById('infoDesc').textContent = item.description || 'No description available.';
-    document.getElementById('infoPlayBtn').onclick = () => { modal.classList.remove('active'); playItem(item, type); };
+    document.getElementById('infoPlayBtn').onclick = () => { modal.classList.remove('active'); playItem(sourceItem, type); };
     document.getElementById('infoListBtn').textContent = inList ? '✓ In My List' : '+ My List';
-    document.getElementById('infoListBtn').onclick = () => { toggleMyList(item, type); showInfo(item, type); };
-    document.getElementById('infoEditBtn').onclick = () => { modal.classList.remove('active'); openEdit(item, type); };
+    document.getElementById('infoListBtn').onclick = () => { toggleMyList(sourceItem, type); showInfo(sourceItem, type); };
+    document.getElementById('infoEditBtn').onclick = () => { modal.classList.remove('active'); openEdit(sourceItem, type); };
     document.getElementById('infoDeleteBtn').onclick = () => {
         if (confirm(`Remove "${item.title}" from your library?`)) {
             if (type === 'movie') movies = movies.filter(m => m.id !== item.id);
@@ -483,9 +486,9 @@ let editType = null;
 
 function openEdit(item, type) {
     editTarget = item;
-    editType = type;
+    editType = (type === 'movie' || type === 'tv') ? type : (item.type || 'movie');
     const ctn = document.getElementById('editFormContainer');
-    const isMovie = type === 'movie';
+    const isMovie = editType === 'movie';
     document.getElementById('editModalTitle').textContent = isMovie ? 'Edit Movie' : 'Edit TV Show';
 
     const g = genArr(item.genre);
@@ -493,8 +496,8 @@ function openEdit(item, type) {
     if (!isMovie && item.episodes && item.episodes.length) {
         episodesHTML = item.episodes.map((ep, i) => `
             <div class="edit-ep-row">
-                <input type="text" class="edit-ep-name" value="${ep.name || ''}" data-i="${i}" placeholder="Episode name">
-                <input type="url" class="edit-ep-src" value="${ep.driveLink || ep.url || ''}" data-i="${i}" placeholder="Drive link or URL">
+                <input type="text" class="edit-ep-name" value="${escapeHtml(ep.name)}" data-i="${i}" placeholder="Episode name">
+                <input type="url" class="edit-ep-src" value="${escapeHtml(ep.driveLink || ep.url || '')}" data-i="${i}" placeholder="Drive link or URL">
             </div>`).join('');
     }
 
@@ -565,38 +568,46 @@ function escapeHtml(str) {
     return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function resolveSourceItem(item, type) {
+    const t = (type === 'movie' || type === 'tv') ? type : (item.type || 'movie');
+    const arr = t === 'movie' ? movies : tvShows;
+    return arr.find(x => x.id === item.id) || item;
+}
+
 function saveEdit(e) {
     e.preventDefault();
     if (!editTarget) return;
+    const target = resolveSourceItem(editTarget, editType);
     const g = Array.from(document.querySelectorAll('#editGenreOptions input[type=checkbox]:checked')).map(cb => cb.value);
 
-    editTarget.title = document.getElementById('editTitle').value.trim();
-    editTarget.description = document.getElementById('editDesc').value.trim();
-    editTarget.genre = g;
-    editTarget.year = document.getElementById('editYear').value;
-    editTarget.rating = document.getElementById('editRating').value;
-    editTarget.poster = document.getElementById('editPoster').value.trim();
-    editTarget.backdrop = document.getElementById('editBackdrop').value.trim();
+    target.title = document.getElementById('editTitle').value.trim();
+    target.description = document.getElementById('editDesc').value.trim();
+    target.genre = g;
+    target.year = document.getElementById('editYear').value;
+    target.rating = document.getElementById('editRating').value;
+    target.poster = document.getElementById('editPoster').value.trim();
+    target.backdrop = document.getElementById('editBackdrop').value.trim();
 
     if (editType === 'movie') {
-        editTarget.driveLink = document.getElementById('editDriveLink').value.trim();
+        target.driveLink = document.getElementById('editDriveLink').value.trim();
     } else {
-        editTarget.season = document.getElementById('editSeason').value || 1;
+        target.season = document.getElementById('editSeason').value || 1;
         const rows = document.querySelectorAll('.edit-ep-row');
-        if (rows.length) {
+        if (rows.length && target.episodes) {
             rows.forEach(row => {
                 const i = row.querySelector('.edit-ep-name').dataset.i;
                 const name = row.querySelector('.edit-ep-name').value.trim();
                 const src = row.querySelector('.edit-ep-src').value.trim();
-                if (editTarget.episodes && editTarget.episodes[i]) {
-                    editTarget.episodes[i].name = name;
-                    editTarget.episodes[i].driveLink = src;
-                    editTarget.episodes[i].url = '';
+                if (target.episodes[i]) {
+                    target.episodes[i].name = name;
+                    target.episodes[i].driveLink = src;
+                    target.episodes[i].url = '';
                 }
             });
         }
     }
 
+    editTarget = target;
     saveData();
     renderAll();
     document.getElementById('editModal').classList.remove('active');
