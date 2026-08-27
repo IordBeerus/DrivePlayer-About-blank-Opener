@@ -57,10 +57,26 @@ function formatSize(bytes) {
     return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
 }
 
+const GENRES = [
+    'action', 'adventure', 'animation', 'biography', 'comedy', 'crime',
+    'documentary', 'drama', 'family', 'fantasy', 'history', 'horror',
+    'mystery', 'musical', 'romance', 'scifi', 'sport', 'thriller',
+    'war', 'western'
+];
+
 const defaultPosters = {
-    action: '🎬', comedy: '😂', drama: '🎭', horror: '👻',
-    scifi: '🚀', thriller: '🔪', romance: '❤️', animation: '✨'
+    action: '🎬', adventure: '🧭', animation: '✨', biography: '📖',
+    comedy: '😂', crime: '🕵️', documentary: '🎥', drama: '🎭',
+    family: '👨‍👩‍👧', fantasy: '🐉', history: '🏛️', horror: '👻',
+    mystery: '🔍', musical: '🎵', romance: '❤️', scifi: '🚀',
+    sport: '🏆', thriller: '🔪', war: '🎖️', western: '🤠'
 };
+
+function genArr(genre) {
+    if (Array.isArray(genre)) return genre;
+    if (!genre) return [];
+    return String(genre).split(',').map(g => g.trim()).filter(Boolean);
+}
 
 // ==================== TAB CLOAK ====================
 function applyCloak() {
@@ -153,6 +169,7 @@ function applyBackground() {
     overlay.style.setProperty('--bg-opacity', opacity);
     overlay.style.setProperty('--bg-blur', blur + 'px');
     overlay.style.setProperty('--bg-color', color);
+    body.style.setProperty('--bg-shadow', color + '66');
 
     overlay.classList.remove('has-image', 'solid-color');
 
@@ -202,7 +219,13 @@ function applyTheme(themeName) {
         ocean: { bgColor: '#0a1a2e', bgImage: '', bgOpacity: 30, bgBlur: 0 },
         sunset: { bgColor: '#2e1a0a', bgImage: '', bgOpacity: 30, bgBlur: 0 },
         light: { bgColor: '#f0f0f0', bgImage: '', bgOpacity: 30, bgBlur: 0 },
-        dracula: { bgColor: '#282a36', bgImage: '', bgOpacity: 30, bgBlur: 0 }
+        dracula: { bgColor: '#282a36', bgImage: '', bgOpacity: 30, bgBlur: 0 },
+        nord: { bgColor: '#2e3440', bgImage: '', bgOpacity: 30, bgBlur: 0 },
+        cyberpunk: { bgColor: '#0d0221', bgImage: '', bgOpacity: 30, bgBlur: 0 },
+        retro: { bgColor: '#2a1b3d', bgImage: '', bgOpacity: 30, bgBlur: 0 },
+        coffee: { bgColor: '#3e2723', bgImage: '', bgOpacity: 30, bgBlur: 0 },
+        lavender: { bgColor: '#2b1b3d', bgImage: '', bgOpacity: 30, bgBlur: 0 },
+        matrix: { bgColor: '#021c0a', bgImage: '', bgOpacity: 30, bgBlur: 0 }
     };
     const theme = themes[themeName];
     if (!theme) return;
@@ -217,6 +240,38 @@ function applyTheme(themeName) {
 }
 
 // ==================== RENDER ====================
+function initGenreOptions() {
+    ['movieGenreOptions', 'tvGenreOptions'].forEach(id => {
+        const ctn = document.getElementById(id);
+        if (!ctn) return;
+        ctn.innerHTML = '';
+        GENRES.forEach(genre => {
+            const label = document.createElement('label');
+            label.className = 'genre-chip';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = genre;
+            cb.className = 'genre-cb';
+            const span = document.createElement('span');
+            span.textContent = genre.charAt(0).toUpperCase() + genre.slice(1);
+            label.appendChild(cb);
+            label.appendChild(span);
+            ctn.appendChild(label);
+        });
+    });
+}
+
+function getSelectedGenres(containerId) {
+    return Array.from(document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)).map(cb => cb.value);
+}
+
+function setSelectedGenres(containerId, genresArr) {
+    const arr = genArr(genresArr);
+    document.querySelectorAll(`#${containerId} input[type=checkbox]`).forEach(cb => {
+        cb.checked = arr.includes(cb.value);
+    });
+}
+
 function renderAll() {
     renderMovies();
     renderTvShows();
@@ -229,7 +284,7 @@ function createCard(item, type) {
     card.className = 'card';
     card.dataset.id = item.id;
     const inList = myList.some(m => m.id === item.id);
-    const genre = item.genre || 'action';
+    const genre = genArr(item.genre)[0] || 'action';
     let imgHTML = '';
     if (item.poster) {
         imgHTML = `<img class="card-img" src="${item.poster}" alt="${item.title}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`;
@@ -280,7 +335,8 @@ function updateHero() {
     if (all.length > 0) {
         const featured = all[Math.floor(Math.random() * all.length)];
         document.getElementById('heroTitle').textContent = featured.title;
-        document.getElementById('heroDesc').textContent = featured.description || `A ${featured.genre || 'great'} ${featured.type || 'title'}. Rating: ${featured.rating || 'N/A'}/10`;
+        const g = genArr(featured.genre);
+        document.getElementById('heroDesc').textContent = featured.description || `A ${g.length ? g.join(', ') : 'great'} ${featured.type || 'title'}. Rating: ${featured.rating || 'N/A'}/10`;
         const bgUrl = featured.backdrop || featured.poster;
         if (bgUrl) {
             document.getElementById('heroSection').style.backgroundImage = `url(${bgUrl})`;
@@ -319,7 +375,7 @@ function playItem(item, type) {
     frame.innerHTML = '';
 
     if (type === 'movie') {
-        subtitle.textContent = `${item.year || ''} • ${item.genre || ''}`;
+        subtitle.textContent = `${item.year || ''} • ${genArr(item.genre).join(', ') || ''}`;
         const driveLink = convertDriveLink(item.driveLink);
         if (driveLink) {
             frame.innerHTML = `<iframe src="${driveLink}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
@@ -392,21 +448,23 @@ function showInfo(item, type) {
     const backdrop = document.getElementById('infoBackdrop');
     const inList = myList.some(m => m.id === item.id);
     const bgUrl = item.backdrop || item.poster;
+    const gArr = genArr(item.genre);
     if (bgUrl) {
         backdrop.style.backgroundImage = `url(${bgUrl})`;
         backdrop.innerHTML = '';
     } else {
         backdrop.style.backgroundImage = 'none';
-        backdrop.textContent = defaultPosters[item.genre] || '🎬';
+        backdrop.textContent = defaultPosters[gArr[0]] || '🎬';
     }
     document.getElementById('infoTitle').textContent = item.title;
     document.getElementById('infoYear').textContent = item.year || '';
     document.getElementById('infoRating').textContent = item.rating ? '★ ' + item.rating : '';
-    document.getElementById('infoGenre').textContent = (item.genre || '').charAt(0).toUpperCase() + (item.genre || '').slice(1);
+    document.getElementById('infoGenre').textContent = gArr.map(g => g.charAt(0).toUpperCase() + g.slice(1)).join(', ');
     document.getElementById('infoDesc').textContent = item.description || 'No description available.';
     document.getElementById('infoPlayBtn').onclick = () => { modal.classList.remove('active'); playItem(item, type); };
     document.getElementById('infoListBtn').textContent = inList ? '✓ In My List' : '+ My List';
     document.getElementById('infoListBtn').onclick = () => { toggleMyList(item, type); showInfo(item, type); };
+    document.getElementById('infoEditBtn').onclick = () => { modal.classList.remove('active'); openEdit(item, type); };
     document.getElementById('infoDeleteBtn').onclick = () => {
         if (confirm(`Remove "${item.title}" from your library?`)) {
             if (type === 'movie') movies = movies.filter(m => m.id !== item.id);
@@ -419,12 +477,138 @@ function showInfo(item, type) {
     modal.classList.add('active');
 }
 
+// ==================== EDIT CONTENT ====================
+let editTarget = null;
+let editType = null;
+
+function openEdit(item, type) {
+    editTarget = item;
+    editType = type;
+    const ctn = document.getElementById('editFormContainer');
+    const isMovie = type === 'movie';
+    document.getElementById('editModalTitle').textContent = isMovie ? 'Edit Movie' : 'Edit TV Show';
+
+    const g = genArr(item.genre);
+    let episodesHTML = '';
+    if (!isMovie && item.episodes && item.episodes.length) {
+        episodesHTML = item.episodes.map((ep, i) => `
+            <div class="edit-ep-row">
+                <input type="text" class="edit-ep-name" value="${ep.name || ''}" data-i="${i}" placeholder="Episode name">
+                <input type="url" class="edit-ep-src" value="${ep.driveLink || ep.url || ''}" data-i="${i}" placeholder="Drive link or URL">
+            </div>`).join('');
+    }
+
+    ctn.innerHTML = `
+        <form id="editForm">
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" id="editTitle" value="${escapeHtml(item.title)}" required>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="editDesc" rows="3">${escapeHtml(item.description || '')}</textarea>
+            </div>
+            <div class="form-group">
+                <label>Genres</label>
+                <div class="genre-options" id="editGenreOptions"></div>
+            </div>
+            <div class="form-group">
+                <label>Year</label>
+                <input type="number" id="editYear" min="1900" max="2030" value="${item.year || ''}">
+            </div>
+            <div class="form-group">
+                <label>Rating (1-10)</label>
+                <input type="number" id="editRating" min="1" max="10" step="0.1" value="${item.rating || ''}">
+            </div>
+            <div class="form-group">
+                <label for="editPoster">Poster URL</label>
+                <input type="url" id="editPoster" value="${escapeHtml(item.poster || '')}">
+            </div>
+            <div class="form-group">
+                <label for="editBackdrop">Backdrop URL</label>
+                <input type="url" id="editBackdrop" value="${escapeHtml(item.backdrop || '')}">
+            </div>
+            ${isMovie ? `
+            <div class="form-group">
+                <label for="editDriveLink">Google Drive Link</label>
+                <input type="url" id="editDriveLink" value="${escapeHtml(item.driveLink || '')}">
+            </div>` : `
+            <div class="form-group">
+                <label>Season Number</label>
+                <input type="number" id="editSeason" min="1" value="${item.season || 1}">
+            </div>
+            ${episodesHTML ? `<div class="form-group"><label>Episodes (Google Drive links or URLs)</label>${episodesHTML}</div>` : ''}
+            `}
+            <button type="submit" class="btn-submit">Save Changes</button>
+        </form>
+    `;
+
+    GENRES.forEach(genre => {
+        const label = document.createElement('label');
+        label.className = 'genre-chip';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = genre;
+        cb.checked = g.includes(genre);
+        const span = document.createElement('span');
+        span.textContent = genre.charAt(0).toUpperCase() + genre.slice(1);
+        label.appendChild(cb);
+        label.appendChild(span);
+        document.getElementById('editGenreOptions').appendChild(label);
+    });
+
+    document.getElementById('editForm').addEventListener('submit', saveEdit);
+    document.getElementById('editModal').classList.add('active');
+}
+
+function escapeHtml(str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function saveEdit(e) {
+    e.preventDefault();
+    if (!editTarget) return;
+    const g = Array.from(document.querySelectorAll('#editGenreOptions input[type=checkbox]:checked')).map(cb => cb.value);
+
+    editTarget.title = document.getElementById('editTitle').value.trim();
+    editTarget.description = document.getElementById('editDesc').value.trim();
+    editTarget.genre = g;
+    editTarget.year = document.getElementById('editYear').value;
+    editTarget.rating = document.getElementById('editRating').value;
+    editTarget.poster = document.getElementById('editPoster').value.trim();
+    editTarget.backdrop = document.getElementById('editBackdrop').value.trim();
+
+    if (editType === 'movie') {
+        editTarget.driveLink = document.getElementById('editDriveLink').value.trim();
+    } else {
+        editTarget.season = document.getElementById('editSeason').value || 1;
+        const rows = document.querySelectorAll('.edit-ep-row');
+        if (rows.length) {
+            rows.forEach(row => {
+                const i = row.querySelector('.edit-ep-name').dataset.i;
+                const name = row.querySelector('.edit-ep-name').value.trim();
+                const src = row.querySelector('.edit-ep-src').value.trim();
+                if (editTarget.episodes && editTarget.episodes[i]) {
+                    editTarget.episodes[i].name = name;
+                    editTarget.episodes[i].driveLink = src;
+                    editTarget.episodes[i].url = '';
+                }
+            });
+        }
+    }
+
+    saveData();
+    renderAll();
+    document.getElementById('editModal').classList.remove('active');
+    toast('Changes saved!', 'success');
+}
+
 // ==================== ADD MOVIE ====================
 document.getElementById('movieForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const title = document.getElementById('movieTitle').value.trim();
     const desc = document.getElementById('movieDesc').value.trim();
-    const genre = document.getElementById('movieGenre').value;
+    const genre = getSelectedGenres('movieGenreOptions');
     const year = document.getElementById('movieYear').value;
     const rating = document.getElementById('movieRating').value;
     const poster = document.getElementById('moviePoster').value.trim();
@@ -571,7 +755,7 @@ document.getElementById('tvShowForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const title = document.getElementById('tvTitle').value.trim();
     const desc = document.getElementById('tvDesc').value.trim();
-    const genre = document.getElementById('tvGenre').value;
+    const genre = getSelectedGenres('tvGenreOptions');
     const year = document.getElementById('tvYear').value;
     const rating = document.getElementById('tvRating').value;
     const poster = document.getElementById('tvPoster').value.trim();
@@ -619,8 +803,9 @@ document.getElementById('tvShowForm').addEventListener('submit', (e) => {
 document.getElementById('searchInput').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase().trim();
     if (!query) { renderAll(); return; }
-    const filteredMovies = movies.filter(m => m.title.toLowerCase().includes(query) || (m.description || '').toLowerCase().includes(query) || (m.genre || '').toLowerCase().includes(query));
-    const filteredTv = tvShows.filter(m => m.title.toLowerCase().includes(query) || (m.description || '').toLowerCase().includes(query) || (m.genre || '').toLowerCase().includes(query));
+    const matches = (m) => m.title.toLowerCase().includes(query) || (m.description || '').toLowerCase().includes(query) || genArr(m.genre).join(' ').toLowerCase().includes(query);
+    const filteredMovies = movies.filter(matches);
+    const filteredTv = tvShows.filter(matches);
     renderSlider('moviesSlider', filteredMovies, 'movie');
     renderSlider('tvShowsSlider', filteredTv, 'tv');
 });
@@ -691,7 +876,7 @@ button:hover{background:#f40612}
 function loadVideo(){
 var u=document.getElementById('videoUrl').value.trim();
 if(!u)return;
-var m=u.match(/\\/file\\/d\\/([a-zA-Z0-9_-]+)/);
+var m=u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
 if(m)u='https://drive.google.com/file/d/'+m[1]+'/preview';
 else if(u.includes('drive.google.com'))u=u.replace('/view','/preview').replace('/edit','/preview');
 document.getElementById('videoFrame').src=u;
@@ -700,7 +885,7 @@ document.getElementById('player').style.display='block';
 function loadDriveVideo(){
 var u=document.getElementById('driveUrl').value.trim();
 if(!u)return;
-var m=u.match(/\\/file\\/d\\/([a-zA-Z0-9_-]+)/);
+var m=u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
 if(m)u='https://drive.google.com/file/d/'+m[1]+'/preview';
 else if(u.includes('drive.google.com'))u=u.replace('/view','/preview').replace('/edit','/preview');
 document.getElementById('videoFrame').src=u;
@@ -847,6 +1032,7 @@ document.getElementById('addContentBtn').addEventListener('click', () => documen
 document.getElementById('closeModal').addEventListener('click', () => document.getElementById('addContentModal').classList.remove('active'));
 document.getElementById('closePlayer').addEventListener('click', () => { document.getElementById('playerModal').classList.remove('active'); document.getElementById('playerFrame').innerHTML = ''; });
 document.getElementById('closeInfo').addEventListener('click', () => document.getElementById('infoModal').classList.remove('active'));
+document.getElementById('closeEdit').addEventListener('click', () => document.getElementById('editModal').classList.remove('active'));
 document.getElementById('closeSettings').addEventListener('click', () => document.getElementById('settingsModal').classList.remove('active'));
 
 document.querySelectorAll('.modal').forEach(modal => {
@@ -903,6 +1089,7 @@ document.getElementById('logoWrap').addEventListener('click', (e) => {
 });
 
 // ==================== INIT ====================
+initGenreOptions();
 applyCloak();
 applyBackground();
 renderAll();
