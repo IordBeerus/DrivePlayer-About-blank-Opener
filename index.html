@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title id="siteTitle">Lucky's Drive Player</title>
+    <title id="siteTitle">StreamFlix</title>
     <link rel="icon" type="image/x-icon" id="siteFavicon" href="data:,">
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -12,7 +12,7 @@
     <nav class="navbar">
         <div class="nav-left">
             <div class="logo-wrap" id="logoWrap">
-                <h1 class="logo" id="siteLogo">DRIVEFLIX</h1>
+                <h1 class="logo" id="siteLogo">STREAMFLIX</h1>
             </div>
             <ul class="nav-links">
                 <li><a href="#" class="nav-link active" data-section="home">Home</a></li>
@@ -97,17 +97,9 @@
                         <textarea id="movieDesc" placeholder="Enter description" rows="3"></textarea>
                     </div>
                     <div class="form-group">
-                        <label for="movieGenre">Genre</label>
-                        <select id="movieGenre">
-                            <option value="action">Action</option>
-                            <option value="comedy">Comedy</option>
-                            <option value="drama">Drama</option>
-                            <option value="horror">Horror</option>
-                            <option value="scifi">Sci-Fi</option>
-                            <option value="thriller">Thriller</option>
-                            <option value="romance">Romance</option>
-                            <option value="animation">Animation</option>
-                        </select>
+                        <label for="movieGenre">Genres (select one or more)</label>
+                        <div class="genre-options" id="movieGenreOptions"></div>
+                        <small class="help-text">Choose all genres that apply to this movie.</small>
                     </div>
                     <div class="form-group">
                         <label for="movieYear">Year</label>
@@ -148,17 +140,9 @@
                         <textarea id="tvDesc" placeholder="Enter description" rows="3"></textarea>
                     </div>
                     <div class="form-group">
-                        <label for="tvGenre">Genre</label>
-                        <select id="tvGenre">
-                            <option value="action">Action</option>
-                            <option value="comedy">Comedy</option>
-                            <option value="drama">Drama</option>
-                            <option value="horror">Horror</option>
-                            <option value="scifi">Sci-Fi</option>
-                            <option value="thriller">Thriller</option>
-                            <option value="romance">Romance</option>
-                            <option value="animation">Animation</option>
-                        </select>
+                        <label for="tvGenre">Genres (select one or more)</label>
+                        <div class="genre-options" id="tvGenreOptions"></div>
+                        <small class="help-text">Choose all genres that apply to this TV show.</small>
                     </div>
                     <div class="form-group">
                         <label for="tvYear">Year</label>
@@ -264,10 +248,20 @@
                     <div class="info-buttons">
                         <button class="btn-primary" id="infoPlayBtn">▶ Play</button>
                         <button class="btn-secondary" id="infoListBtn">+ My List</button>
+                        <button class="btn-secondary" id="infoEditBtn">✏ Edit</button>
                         <button class="btn-danger" id="infoDeleteBtn">✕ Remove</button>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Edit Content Modal -->
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <span class="close-modal" id="closeEdit">&times;</span>
+            <h2 class="modal-title" id="editModalTitle">Edit Content</h2>
+            <div id="editFormContainer"></div>
         </div>
     </div>
 
@@ -394,6 +388,30 @@
                         <div class="theme-swatch" style="background: linear-gradient(135deg, #282a36, #44475a)"></div>
                         <span>Dracula</span>
                     </button>
+                    <button class="theme-card" data-theme="nord">
+                        <div class="theme-swatch" style="background: linear-gradient(135deg, #2e3440, #4c566a)"></div>
+                        <span>Nord</span>
+                    </button>
+                    <button class="theme-card" data-theme="cyberpunk">
+                        <div class="theme-swatch" style="background: linear-gradient(135deg, #0d0221, #6800ff)"></div>
+                        <span>Cyberpunk</span>
+                    </button>
+                    <button class="theme-card" data-theme="retro">
+                        <div class="theme-swatch" style="background: linear-gradient(135deg, #2a1b3d, #d7263d)"></div>
+                        <span>Retro</span>
+                    </button>
+                    <button class="theme-card" data-theme="coffee">
+                        <div class="theme-swatch" style="background: linear-gradient(135deg, #3e2723, #6d4c41)"></div>
+                        <span>Coffee</span>
+                    </button>
+                    <button class="theme-card" data-theme="lavender">
+                        <div class="theme-swatch" style="background: linear-gradient(135deg, #2b1b3d, #5b2c8a)"></div>
+                        <span>Lavender</span>
+                    </button>
+                    <button class="theme-card" data-theme="matrix">
+                        <div class="theme-swatch" style="background: linear-gradient(135deg, #021c0a, #00ff88)"></div>
+                        <span>Matrix</span>
+                    </button>
                 </div>
                 <button class="btn-submit" id="resetBgBtn" style="background:#333;margin-top:10px;">Reset to Default</button>
             </div>
@@ -406,14 +424,14 @@
     <!-- Footer -->
     <footer class="footer" id="siteFooter">
         <div class="footer-content">
-            <p id="footerTitle">DriveFlix - Your Personal Streaming Platform</p>
+            <p id="footerTitle">StreamFlix - Your Personal Streaming Platform</p>
             <p class="footer-links">
                 <a href="#" id="footerHelp">Help</a>
                 <a href="#" id="footerTerms">Terms</a>
                 <a href="#" id="footerPrivacy">Privacy</a>
                 <a href="#" id="footerContact">Contact</a>
             </p>
-            <p class="copyright">&copy; 2024 <span class="footer-brand">DriveFlix</span>. For personal use only.</p>
+            <p class="copyright">&copy; 2024 <span class="footer-brand">StreamFlix</span>. For personal use only.</p>
         </div>
     </footer>
 
