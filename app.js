@@ -5,13 +5,15 @@ let myList = JSON.parse(localStorage.getItem('sf_mylist')) || [];
 let settings = JSON.parse(localStorage.getItem('sf_settings')) || {
     cloakTitle: '',
     cloakFavicon: '',
-    cloakLogoText: 'STREAMFLIX',
+    cloakLogoText: 'LUCKYFLIX',
     cloakLogoImage: '',
     bgColor: '#141414',
     bgImage: '',
     bgOpacity: 30,
     bgBlur: 0,
-    activeTheme: ''
+    activeTheme: '',
+    heroLogo: '',
+    heroLogoData: ''
 };
 let uploadedDriveEps = [];
 let uploadedFileEps = [];
@@ -90,9 +92,9 @@ function isLightColor(hex) {
 
 // ==================== TAB CLOAK ====================
 function applyCloak() {
-    const title = settings.cloakTitle || 'StreamFlix';
+    const title = settings.cloakTitle || 'LUCKYFLIX';
     const favicon = settings.cloakFavicon;
-    const logoText = settings.cloakLogoText || 'STREAMFLIX';
+    const logoText = settings.cloakLogoText || 'LUCKYFLIX';
     const logoImage = settings.cloakLogoImage;
 
     document.getElementById('siteTitle').textContent = title;
@@ -144,7 +146,7 @@ function updateLogoPreview() {
     const textEl = document.getElementById('logoPreviewText');
     if (!preview || !textEl) return;
     const logoImage = settings.cloakLogoImage;
-    const logoText = settings.cloakLogoText || 'STREAMFLIX';
+    const logoText = settings.cloakLogoText || 'LUCKYFLIX';
 
     const existingImg = preview.querySelector('img');
     if (existingImg) existingImg.remove();
@@ -166,6 +168,21 @@ function updateLogoPreview() {
 }
 
 // ==================== BACKGROUND ====================
+function computeShadowColor(hex) {
+    const m = String(hex || '').match(/^#?([0-9a-f]{6})$/i);
+    if (!m) return 'rgba(0,0,0,0.5)';
+    let r = parseInt(m[1].substr(0, 2), 16);
+    let g = parseInt(m[1].substr(2, 2), 16);
+    let b = parseInt(m[1].substr(4, 2), 16);
+    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    if (lum > 150) return 'rgba(0,0,0,0.45)';
+    // Darken the color for a natural shadow that blends with dark themes
+    r = Math.round(r * 0.55);
+    g = Math.round(g * 0.55);
+    b = Math.round(b * 0.55);
+    return `rgba(${r},${g},${b},0.55)`;
+}
+
 function applyBackground() {
     const overlay = document.getElementById('bgOverlay');
     const body = document.getElementById('siteBody');
@@ -179,7 +196,7 @@ function applyBackground() {
     overlay.style.setProperty('--bg-opacity', opacity);
     overlay.style.setProperty('--bg-blur', blur + 'px');
     overlay.style.setProperty('--bg-color', color);
-    body.style.setProperty('--bg-shadow', color + '66');
+    body.style.setProperty('--bg-shadow', image ? 'rgba(0,0,0,0.5)' : computeShadowColor(color));
 
     const isLight = isLightColor(color);
     body.classList.toggle('light-mode', isLight);
@@ -250,6 +267,51 @@ function applyTheme(themeName) {
         c.classList.toggle('active', c.dataset.theme === themeName);
     });
     toast(`Applied "${themeName}" theme`, 'success');
+}
+
+// ==================== HERO LOGO ====================
+function getHeroLogoSource() {
+    return settings.heroLogoData || settings.heroLogo;
+}
+
+function applyHeroLogo() {
+    const src = getHeroLogoSource();
+    const logo = document.getElementById('heroLogo');
+    if (!logo) return;
+    if (src) {
+        logo.src = src;
+        logo.style.display = 'block';
+    } else {
+        logo.removeAttribute('src');
+        logo.style.display = 'none';
+    }
+    updateHeroLogoPreview();
+}
+
+function updateHeroLogoPreview() {
+    const preview = document.getElementById('heroLogoPreview');
+    const textEl = document.getElementById('heroLogoPreviewText');
+    const urlInput = document.getElementById('heroLogoUrl');
+    if (!preview) return;
+    const src = getHeroLogoSource();
+    if (urlInput) urlInput.value = settings.heroLogo;
+
+    const existingImg = preview.querySelector('img');
+    if (existingImg) existingImg.remove();
+
+    if (textEl) {
+        if (src) {
+            textEl.style.display = 'none';
+            const img = document.createElement('img');
+            img.src = src;
+            img.alt = 'Hero Logo Preview';
+            img.onerror = () => { img.remove(); if (textEl) { textEl.textContent = 'Could not load image'; textEl.style.display = ''; } };
+            preview.appendChild(img);
+        } else {
+            textEl.textContent = 'No logo set';
+            textEl.style.display = '';
+        }
+    }
 }
 
 // ==================== RENDER ====================
@@ -351,9 +413,12 @@ function renderMyList() { renderSlider('myListSlider', myList, 'mixed'); }
 
 function updateHero() {
     const all = [...movies, ...tvShows];
+    const heroLogo = document.getElementById('heroLogo');
+    const heroTitle = document.getElementById('heroTitle');
     if (all.length > 0) {
-        const featured = all[Math.floor(Math.random() * all.length)];
-        document.getElementById('heroTitle').textContent = featured.title;
+        const withLogo = all.filter(i => i.logo);
+        const featured = (withLogo.length > 0 ? withLogo : all)[Math.floor(Math.random() * (withLogo.length > 0 ? withLogo.length : all.length))];
+        heroTitle.textContent = featured.title;
         const g = genArr(featured.genre);
         document.getElementById('heroDesc').textContent = featured.description || `A ${g.length ? g.join(', ') : 'great'} ${featured.type || 'title'}. Rating: ${featured.rating || 'N/A'}/10`;
         const bgUrl = featured.backdrop || featured.poster;
@@ -366,12 +431,24 @@ function updateHero() {
         }
         document.getElementById('heroPlayBtn').onclick = () => playItem(featured, featured.type || 'movie');
         document.getElementById('heroInfoBtn').onclick = () => showInfo(featured, featured.type || 'movie');
+        // Show the featured movie's own logo (if set) on the hero's large image; keep title text at the bottom
+        if (featured.logo) {
+            heroLogo.src = featured.logo;
+            heroLogo.style.display = 'block';
+            heroTitle.style.display = '';
+        } else {
+            heroLogo.removeAttribute('src');
+            heroLogo.style.display = 'none';
+            applyHeroLogo();
+        }
     } else {
-        document.getElementById('heroTitle').textContent = 'Welcome to StreamFlix';
+        heroTitle.textContent = 'Welcome to LUCKYFLIX';
+        heroTitle.style.display = '';
         document.getElementById('heroDesc').textContent = 'Your personal streaming platform. Add movies via Google Drive or upload TV shows.';
         document.getElementById('heroSection').style.backgroundImage = '';
         document.getElementById('heroPlayBtn').onclick = null;
         document.getElementById('heroInfoBtn').onclick = null;
+        applyHeroLogo();
     }
 }
 
@@ -488,6 +565,16 @@ function showInfo(item, type) {
     document.getElementById('infoRating').textContent = item.rating ? '★ ' + item.rating : '';
     document.getElementById('infoGenre').textContent = gArr.map(g => g.charAt(0).toUpperCase() + g.slice(1)).join(', ');
     document.getElementById('infoDesc').textContent = item.description || 'No description available.';
+    const infoLogo = document.getElementById('infoLogo');
+    if (infoLogo) {
+        if (item.logo) {
+            infoLogo.src = item.logo;
+            infoLogo.style.display = 'block';
+        } else {
+            infoLogo.removeAttribute('src');
+            infoLogo.style.display = 'none';
+        }
+    }
     document.getElementById('infoPlayBtn').onclick = () => { modal.classList.remove('active'); playItem(sourceItem, type); };
     document.getElementById('infoListBtn').textContent = inList ? '✓ In My List' : '+ My List';
     document.getElementById('infoListBtn').onclick = () => { toggleMyList(sourceItem, type); showInfo(sourceItem, type); };
@@ -557,6 +644,11 @@ function openEdit(item, type) {
             </div>
             ${isMovie ? `
             <div class="form-group">
+                <label for="editLogo">Movie Logo URL</label>
+                <input type="url" id="editLogo" placeholder="https://example.com/logo.png" value="${escapeHtml(item.logo || '')}">
+                <small class="help-text">Logo image shown on top of the movie title in the info modal.</small>
+            </div>
+            <div class="form-group">
                 <label for="editDriveLink">Google Drive Link</label>
                 <input type="url" id="editDriveLink" value="${escapeHtml(item.driveLink || '')}">
             </div>` : `
@@ -570,6 +662,7 @@ function openEdit(item, type) {
         </form>
     `;
 
+    // Build genre chips
     GENRES.forEach(genre => {
         const label = document.createElement('label');
         label.className = 'genre-chip';
@@ -613,6 +706,7 @@ function saveEdit(e) {
     target.backdrop = document.getElementById('editBackdrop').value.trim();
 
     if (editType === 'movie') {
+        target.logo = document.getElementById('editLogo').value.trim();
         target.driveLink = document.getElementById('editDriveLink').value.trim();
     } else {
         target.season = document.getElementById('editSeason').value || 1;
@@ -648,9 +742,10 @@ document.getElementById('movieForm').addEventListener('submit', (e) => {
     const rating = document.getElementById('movieRating').value;
     const poster = document.getElementById('moviePoster').value.trim();
     const backdrop = document.getElementById('movieBackdrop').value.trim();
+    const logo = document.getElementById('movieLogoUrl').value.trim();
     const driveLink = document.getElementById('movieDriveLink').value.trim();
     if (!title || !driveLink) { toast('Please fill in the title and Google Drive link.', 'error'); return; }
-    movies.push({ id: generateId(), title, description: desc, genre, year, rating, poster, backdrop, driveLink, type: 'movie' });
+    movies.push({ id: generateId(), title, description: desc, genre, year, rating, poster, backdrop, logo, driveLink, type: 'movie' });
     saveData();
     renderAll();
     document.getElementById('addContentModal').classList.remove('active');
@@ -848,7 +943,7 @@ document.getElementById('searchBtn').addEventListener('click', () => document.ge
 
 // ==================== ABOUT:BLANK OPENER ====================
 document.getElementById('aboutBlankBtn').addEventListener('click', () => {
-    const cloakTitle = settings.cloakTitle || 'StreamFlix';
+    const cloakTitle = settings.cloakTitle || 'LUCKYFLIX';
     const cloakFavicon = settings.cloakFavicon || '';
     const bgColor = settings.bgColor || '#000';
     const bgImage = settings.bgImage || '';
@@ -911,7 +1006,7 @@ button:hover{background:#f40612}
 function loadVideo(){
 var u=document.getElementById('videoUrl').value.trim();
 if(!u)return;
-var m=u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+var m=u.match(/\\/file\\/d\\/([a-zA-Z0-9_-]+)/);
 if(m)u='https://drive.google.com/file/d/'+m[1]+'/preview';
 else if(u.includes('drive.google.com'))u=u.replace('/view','/preview').replace('/edit','/preview');
 document.getElementById('videoFrame').src=u;
@@ -920,7 +1015,7 @@ document.getElementById('player').style.display='block';
 function loadDriveVideo(){
 var u=document.getElementById('driveUrl').value.trim();
 if(!u)return;
-var m=u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+var m=u.match(/\\/file\\/d\\/([a-zA-Z0-9_-]+)/);
 if(m)u='https://drive.google.com/file/d/'+m[1]+'/preview';
 else if(u.includes('drive.google.com'))u=u.replace('/view','/preview').replace('/edit','/preview');
 document.getElementById('videoFrame').src=u;
@@ -983,6 +1078,62 @@ document.getElementById('resetBgBtn').addEventListener('click', () => {
     applyBackground();
     applyTheme('default');
     toast('Reset to default', 'success');
+});
+
+// Hero Logo controls
+document.getElementById('applyHeroLogoBtn').addEventListener('click', () => {
+    const url = document.getElementById('heroLogoUrl').value.trim();
+    if (url) {
+        settings.heroLogo = url;
+        settings.heroLogoData = '';
+        saveData();
+        applyHeroLogo();
+        toast('Hero logo applied!', 'success');
+    } else {
+        toast('Enter a logo image URL first.', 'error');
+    }
+});
+
+document.getElementById('removeHeroLogoBtn').addEventListener('click', () => {
+    settings.heroLogo = '';
+    settings.heroLogoData = '';
+    document.getElementById('heroLogoUrl').value = '';
+    const upload = document.getElementById('heroLogoUpload');
+    if (upload) upload.value = '';
+    saveData();
+    applyHeroLogo();
+    toast('Hero logo removed', 'success');
+});
+
+document.getElementById('heroLogoUrl').addEventListener('input', (e) => {
+    const url = e.target.value.trim();
+    if (/^https?:\/\/.+\.(png|jpe?g|gif|svg|webp)(\?.*)?$/i.test(url)) {
+        const preview = document.getElementById('heroLogoPreview');
+        const existingImg = preview.querySelector('img');
+        if (existingImg) existingImg.remove();
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = 'Hero Logo Preview';
+        img.onerror = () => img.remove();
+        preview.appendChild(img);
+        document.getElementById('heroLogoPreviewText').style.display = 'none';
+    }
+});
+
+document.getElementById('heroLogoUpload').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast('Image too large. Max 5MB.', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        settings.heroLogoData = ev.target.result;
+        settings.heroLogo = '';
+        document.getElementById('heroLogoUrl').value = '';
+        saveData();
+        applyHeroLogo();
+        toast('Hero logo uploaded!', 'success');
+    };
+    reader.readAsDataURL(file);
 });
 
 // Color picker sync
@@ -1058,7 +1209,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
         show('moviesSection', section === 'home' || section === 'movies');
         show('tvShowsSection', section === 'home' || section === 'tvshows');
         show('myListSection', section === 'home' || section === 'mylist');
-        document.getElementById('heroSection').style.display = section === 'mylist' ? 'none' : '';
+        document.getElementById('heroSection').style.display = (section === 'mylist') ? 'none' : '';
     });
 });
 
@@ -1111,9 +1262,9 @@ window.addEventListener('scroll', () => {
 
 // ==================== FOOTER LINKS ====================
 document.getElementById('footerHelp').addEventListener('click', (e) => { e.preventDefault(); toast('Help: Add movies with Google Drive links, upload TV episodes, and click Play to watch!'); });
-document.getElementById('footerTerms').addEventListener('click', (e) => { e.preventDefault(); toast('For personal use only. StreamFlix is a personal media organizer.'); });
+document.getElementById('footerTerms').addEventListener('click', (e) => { e.preventDefault(); toast('For personal use only. LUCKYFLIX is a personal media organizer.'); });
 document.getElementById('footerPrivacy').addEventListener('click', (e) => { e.preventDefault(); toast('All data is stored locally in your browser. Nothing is sent to any server.'); });
-document.getElementById('footerContact').addEventListener('click', (e) => { e.preventDefault(); toast('StreamFlix - Built with love for streaming enthusiasts.'); });
+document.getElementById('footerContact').addEventListener('click', (e) => { e.preventDefault(); toast('LUCKYFLIX - Built with love for streaming enthusiasts.'); });
 
 // ==================== LOGO CLICK ====================
 document.getElementById('logoWrap').addEventListener('click', (e) => {
@@ -1124,7 +1275,11 @@ document.getElementById('logoWrap').addEventListener('click', (e) => {
 });
 
 // ==================== INIT ====================
-initGenreOptions();
-applyCloak();
-applyBackground();
-renderAll();
+function initAll() {
+    try { initGenreOptions(); } catch (e) { console.error('initGenreOptions error:', e); }
+    try { applyCloak(); } catch (e) { console.error('applyCloak error:', e); }
+    try { applyBackground(); } catch (e) { console.error('applyBackground error:', e); }
+    try { renderAll(); } catch (e) { console.error('renderAll error:', e); }
+    try { applyHeroLogo(); } catch (e) { console.error('applyHeroLogo error:', e); }
+}
+initAll();
