@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title id="siteTitle">LuckyFlix</title>
+    <title id="siteTitle">LUCKYFLIX</title>
     <link rel="icon" type="image/x-icon" id="siteFavicon" href="data:,">
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -12,7 +12,7 @@
     <nav class="navbar">
         <div class="nav-left">
             <div class="logo-wrap" id="logoWrap">
-                <h1 class="logo" id="siteLogo">LuckyFlix</h1>
+                <h1 class="logo" id="siteLogo">LUCKYFLIX</h1>
             </div>
             <ul class="nav-links">
                 <li><a href="#" class="nav-link active" data-section="home">Home</a></li>
@@ -37,8 +37,9 @@
     <!-- Hero Banner -->
     <div class="hero" id="heroSection">
         <div class="hero-content">
-            <h2 class="hero-title" id="heroTitle">Welcome to LuckyFlix</h2>
+            <h2 class="hero-title" id="heroTitle">Welcome to LUCKYFLIX</h2>
             <p class="hero-desc" id="heroDesc">Your personal streaming platform. Add movies via Google Drive or upload TV shows.</p>
+            <img class="hero-logo" id="heroLogo" alt="Hero Logo" style="display:none" onerror="this.style.display='none'">
             <div class="hero-buttons">
                 <button class="btn-primary" id="heroPlayBtn">▶ Play</button>
                 <button class="btn-secondary" id="heroInfoBtn">ℹ More Info</button>
@@ -118,6 +119,11 @@
                         <label for="movieBackdrop">Backdrop URL (Large Image)</label>
                         <input type="url" id="movieBackdrop" placeholder="https://example.com/backdrop.jpg">
                         <small class="help-text">Wide landscape image shown on the hero banner and info modal.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="movieLogoUrl">Movie Logo URL</label>
+                        <input type="url" id="movieLogoUrl" placeholder="https://example.com/logo.png">
+                        <small class="help-text">Paste a link to a logo image. It appears on top of the movie title in the info modal.</small>
                     </div>
                     <div class="form-group">
                         <label for="movieDriveLink">Google Drive Link</label>
@@ -238,6 +244,7 @@
             <div class="info-container">
                 <div class="info-backdrop" id="infoBackdrop"></div>
                 <div class="info-details">
+                    <img class="info-logo" id="infoLogo" alt="Logo" style="display:none">
                     <h2 id="infoTitle"></h2>
                     <div class="info-meta">
                         <span id="infoYear"></span>
@@ -276,7 +283,7 @@
                 <h3 class="settings-section-title">Tab Cloak</h3>
                 <div class="form-group">
                     <label for="cloakTitle">Site Name (Tab Title)</label>
-                    <input type="text" id="cloakTitle" placeholder="StreamFlix">
+                    <input type="text" id="cloakTitle" placeholder="LUCKYFLIX">
                     <small class="help-text">Changes the browser tab name for both the main site and about:blank.</small>
                 </div>
                 <div class="form-group">
@@ -287,12 +294,12 @@
                 <div class="form-group">
                     <label>Logo Display</label>
                     <div class="logo-preview" id="logoPreview">
-                        <span id="logoPreviewText">LuckyFlix</span>
+                        <span id="logoPreviewText">LUCKYFLIX</span>
                     </div>
                 </div>
                 <div class="form-group">
                     <label for="cloakLogoText">Logo Text</label>
-                    <input type="text" id="cloakLogoText" placeholder="STREAMFLIX">
+                    <input type="text" id="cloakLogoText" placeholder="LUCKYFLIX">
                 </div>
                 <div class="form-group">
                     <label for="cloakLogoImage">Logo Image URL (Optional)</label>
@@ -350,6 +357,31 @@
                     <div class="bg-preview-box" id="bgPreviewBox">Preview</div>
                 </div>
                 <button class="btn-submit" id="applyBgBtn">Apply Background</button>
+            </div>
+
+            <!-- Hero Logo -->
+            <div class="settings-section">
+                <h3 class="settings-section-title">Hero Logo</h3>
+                <p class="settings-note" style="color:#888;font-size:13px;margin-bottom:12px;">Your logo appears on the hero banner in place of the movie title text. A transparent PNG works best.</p>
+                <div class="form-group">
+                    <label for="heroLogoUpload">Upload Logo Image</label>
+                    <input type="file" id="heroLogoUpload" accept="image/*">
+                    <small class="help-text">Converts the image to a data URL. Max 5MB.</small>
+                </div>
+                <div class="form-group">
+                    <label for="heroLogoUrl">Or Logo Image URL</label>
+                    <input type="url" id="heroLogoUrl" placeholder="https://example.com/logo.png">
+                </div>
+                <div class="form-group">
+                    <label>Hero Logo Preview</label>
+                    <div class="hero-logo-preview" id="heroLogoPreview">
+                        <span id="heroLogoPreviewText" style="color:#888;">No logo set</span>
+                    </div>
+                </div>
+                <div class="settings-btn-row">
+                    <button class="btn-submit" id="applyHeroLogoBtn">Apply Logo</button>
+                    <button class="btn-danger" id="removeHeroLogoBtn">Remove Logo</button>
+                </div>
             </div>
 
             <!-- Preset Themes -->
@@ -424,14 +456,14 @@
     <!-- Footer -->
     <footer class="footer" id="siteFooter">
         <div class="footer-content">
-            <p id="footerTitle">LuckyFlix - Your Personal Streaming Platform</p>
+            <p id="footerTitle">LUCKYFLIX - Your Personal Streaming Platform</p>
             <p class="footer-links">
                 <a href="#" id="footerHelp">Help</a>
                 <a href="#" id="footerTerms">Terms</a>
                 <a href="#" id="footerPrivacy">Privacy</a>
                 <a href="#" id="footerContact">Contact</a>
             </p>
-            <p class="copyright">&copy; 2024 <span class="footer-brand">LuckyFlix</span>. For personal use only.</p>
+            <p class="copyright">&copy; 2024 <span class="footer-brand">LUCKYFLIX</span>. For personal use only.</p>
         </div>
     </footer>
 
