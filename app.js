@@ -80,22 +80,21 @@ function applyCloak() {
     const logoEl = document.getElementById('siteLogo');
     const logoWrap = document.getElementById('logoWrap');
     const existingLogoImg = logoWrap.querySelector('img.logo-image');
+
     logoEl.textContent = logoText;
 
     if (logoImage) {
-       logoEl.textContent = logoText;
         if (!existingLogoImg) {
             const img = document.createElement('img');
             img.className = 'logo-image';
             img.src = logoImage;
             img.alt = logoText;
             img.onerror = () => img.remove();
-        logoWrap.insertBefore(img, logoEl);
+            logoWrap.insertBefore(img, logoEl);
         } else {
             existingLogoImg.src = logoImage;
         }
     } else {
-        
         if (existingLogoImg) existingLogoImg.remove();
     }
 
@@ -117,6 +116,7 @@ function applyCloak() {
 function updateLogoPreview() {
     const preview = document.getElementById('logoPreview');
     const textEl = document.getElementById('logoPreviewText');
+    if (!preview || !textEl) return;
     const logoImage = settings.cloakLogoImage;
     const logoText = settings.cloakLogoText || 'STREAMFLIX';
 
@@ -124,13 +124,15 @@ function updateLogoPreview() {
     if (existingImg) existingImg.remove();
 
     if (logoImage) {
-        textEl.style.display = 'none';
+        textEl.textContent = logoText;
+        textEl.style.display = '';
         const img = document.createElement('img');
         img.src = logoImage;
         img.alt = logoText;
         img.style.maxHeight = '36px';
-        img.onerror = () => { img.remove(); textEl.style.display = ''; textEl.textContent = logoText; };
-        preview.appendChild(img);
+        img.style.marginLeft = '10px';
+        img.onerror = () => { img.remove(); };
+        textEl.parentNode.insertBefore(img, textEl.nextSibling);
     } else {
         textEl.style.display = '';
         textEl.textContent = logoText;
@@ -141,6 +143,7 @@ function updateLogoPreview() {
 function applyBackground() {
     const overlay = document.getElementById('bgOverlay');
     const body = document.getElementById('siteBody');
+    if (!overlay || !body) return;
     const color = settings.bgColor || '#141414';
     const image = settings.bgImage;
     const opacity = (settings.bgOpacity || 30) / 100;
@@ -174,6 +177,7 @@ function applyBackground() {
 
 function updateBgPreview() {
     const box = document.getElementById('bgPreviewBox');
+    if (!box) return;
     const color = settings.bgColor || '#141414';
     const image = settings.bgImage;
     const opacity = (settings.bgOpacity || 30) / 100;
@@ -277,10 +281,13 @@ function updateHero() {
         const featured = all[Math.floor(Math.random() * all.length)];
         document.getElementById('heroTitle').textContent = featured.title;
         document.getElementById('heroDesc').textContent = featured.description || `A ${featured.genre || 'great'} ${featured.type || 'title'}. Rating: ${featured.rating || 'N/A'}/10`;
-        if (featured.poster) {
-            document.getElementById('heroSection').style.backgroundImage = `url(${featured.poster})`;
+        const bgUrl = featured.backdrop || featured.poster;
+        if (bgUrl) {
+            document.getElementById('heroSection').style.backgroundImage = `url(${bgUrl})`;
             document.getElementById('heroSection').style.backgroundSize = 'cover';
             document.getElementById('heroSection').style.backgroundPosition = 'center top';
+        } else {
+            document.getElementById('heroSection').style.backgroundImage = '';
         }
         document.getElementById('heroPlayBtn').onclick = () => playItem(featured, featured.type || 'movie');
         document.getElementById('heroInfoBtn').onclick = () => showInfo(featured, featured.type || 'movie');
@@ -382,14 +389,15 @@ function showInfo(item, type) {
     currentInfoItem = item;
     currentInfoType = type;
     const modal = document.getElementById('infoModal');
-    const poster = document.getElementById('infoPoster');
+    const backdrop = document.getElementById('infoBackdrop');
     const inList = myList.some(m => m.id === item.id);
-    if (item.poster) {
-        poster.style.backgroundImage = `url(${item.poster})`;
-        poster.innerHTML = '';
+    const bgUrl = item.backdrop || item.poster;
+    if (bgUrl) {
+        backdrop.style.backgroundImage = `url(${bgUrl})`;
+        backdrop.innerHTML = '';
     } else {
-        poster.style.backgroundImage = 'none';
-        poster.textContent = defaultPosters[item.genre] || '🎬';
+        backdrop.style.backgroundImage = 'none';
+        backdrop.textContent = defaultPosters[item.genre] || '🎬';
     }
     document.getElementById('infoTitle').textContent = item.title;
     document.getElementById('infoYear').textContent = item.year || '';
@@ -420,11 +428,15 @@ document.getElementById('movieForm').addEventListener('submit', (e) => {
     const year = document.getElementById('movieYear').value;
     const rating = document.getElementById('movieRating').value;
     const poster = document.getElementById('moviePoster').value.trim();
+    const backdrop = document.getElementById('movieBackdrop').value.trim();
     const driveLink = document.getElementById('movieDriveLink').value.trim();
     if (!title || !driveLink) { toast('Please fill in the title and Google Drive link.', 'error'); return; }
-    movies.push({ id: generateId(), title, description: desc, genre, year, rating, poster, driveLink, type: 'movie' });
+    movies.push({ id: generateId(), title, description: desc, genre, year, rating, poster, backdrop, driveLink, type: 'movie' });
+    saveData();
+    renderAll();
     document.getElementById('addContentModal').classList.remove('active');
     toast(`"${title}" added successfully!`, 'success');
+    try { e.target.reset(); } catch(_) {}
 });
 
 // ==================== TV SHOW EPISODE MANAGEMENT ====================
@@ -563,8 +575,9 @@ document.getElementById('tvShowForm').addEventListener('submit', (e) => {
     const year = document.getElementById('tvYear').value;
     const rating = document.getElementById('tvRating').value;
     const poster = document.getElementById('tvPoster').value.trim();
+    const backdrop = document.getElementById('tvBackdrop').value.trim();
     const season = document.getElementById('tvSeason').value;
-    const isDrive = document.querySelector('.toggle-btn[data-source].active')?.dataset.source === 'drive';
+    const isDrive = document.querySelector('#tvTab .toggle-btn[data-source].active')?.dataset.source === 'drive';
     if (!title) { toast('Please enter a TV show title.', 'error'); return; }
 
     let episodes = [];
@@ -578,16 +591,28 @@ document.getElementById('tvShowForm').addEventListener('submit', (e) => {
         }));
     }
 
-    tvShows.push({ id: generateId(), title, description: desc, genre, year, rating, poster, season: season || 1, episodes, type: 'tv' });
-    saveData(); renderAll(); e.target.reset();
+    tvShows.push({ id: generateId(), title, description: desc, genre, year, rating, poster, backdrop, season: season || 1, episodes, type: 'tv' });
+    saveData();
+    renderAll();
+
+    document.getElementById('addContentModal').classList.remove('active');
+    toast(`"${title}" added successfully!`, 'success');
+
     uploadedDriveEps = [];
     uploadedFileEps = [];
+
+    try { e.target.reset(); } catch(_) {}
+
     document.getElementById('driveEpisodeList').innerHTML = '';
     document.getElementById('driveEpisodeListContainer').style.display = 'none';
     document.getElementById('fileEpisodeList').innerHTML = '';
     document.getElementById('fileEpisodeListContainer').style.display = 'none';
-    document.getElementById('addContentModal').classList.remove('active');
-    toast(`"${title}" added successfully!`, 'success');
+
+    document.querySelectorAll('#tvTab .toggle-btn[data-source]').forEach(b => b.classList.remove('active'));
+    const driveBtn = document.getElementById('epSourceDrive');
+    if (driveBtn) driveBtn.classList.add('active');
+    document.getElementById('epDriveSection').style.display = '';
+    document.getElementById('epFileSection').style.display = 'none';
 });
 
 // ==================== SEARCH ====================
@@ -870,19 +895,11 @@ document.getElementById('footerPrivacy').addEventListener('click', (e) => { e.pr
 document.getElementById('footerContact').addEventListener('click', (e) => { e.preventDefault(); toast('StreamFlix - Built with love for streaming enthusiasts.'); });
 
 // ==================== LOGO CLICK ====================
-document.getElementById('siteLogo').addEventListener('click', () => {
+document.getElementById('logoWrap').addEventListener('click', (e) => {
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
     document.querySelector('.nav-link[data-section="home"]').classList.add('active');
     ['moviesSection', 'tvShowsSection', 'myListSection', 'heroSection'].forEach(id => document.getElementById(id).style.display = '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-});
-document.getElementById('logoWrap').addEventListener('click', (e) => {
-    if (e.target.id !== 'siteLogo') {
-        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-        document.querySelector('.nav-link[data-section="home"]').classList.add('active');
-        ['moviesSection', 'tvShowsSection', 'myListSection', 'heroSection'].forEach(id => document.getElementById(id).style.display = '');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
 });
 
 // ==================== INIT ====================
