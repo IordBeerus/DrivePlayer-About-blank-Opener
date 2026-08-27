@@ -78,6 +78,16 @@ function genArr(genre) {
     return String(genre).split(',').map(g => g.trim()).filter(Boolean);
 }
 
+function isLightColor(hex) {
+    const m = String(hex || '').match(/^#?([0-9a-f]{6})$/i);
+    if (!m) return false;
+    const r = parseInt(m[1].substr(0, 2), 16);
+    const g = parseInt(m[1].substr(2, 2), 16);
+    const b = parseInt(m[1].substr(4, 2), 16);
+    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return lum > 150;
+}
+
 // ==================== TAB CLOAK ====================
 function applyCloak() {
     const title = settings.cloakTitle || 'StreamFlix';
@@ -171,10 +181,13 @@ function applyBackground() {
     overlay.style.setProperty('--bg-color', color);
     body.style.setProperty('--bg-shadow', color + '66');
 
+    const isLight = isLightColor(color);
+    body.classList.toggle('light-mode', isLight);
+
     overlay.classList.remove('has-image', 'solid-color');
 
     if (image) {
-        overlay.style.backgroundImage = `url(${image})`;
+        overlay.style.backgroundImage = `url("${escapeHtml(image)}")`;
         overlay.classList.add('has-image');
     } else {
         overlay.style.backgroundImage = '';
@@ -201,7 +214,7 @@ function updateBgPreview() {
 
     box.style.backgroundColor = color;
     if (image) {
-        box.style.backgroundImage = `url(${image})`;
+        box.style.backgroundImage = `url("${escapeHtml(image)}")`;
         box.style.backgroundSize = 'cover';
         box.style.opacity = opacity;
     } else {
@@ -286,9 +299,11 @@ function createCard(item, type) {
     const effType = (type === 'movie' || type === 'tv') ? type : (item.type || 'movie');
     const inList = myList.some(m => m.id === item.id);
     const genre = genArr(item.genre)[0] || 'action';
+    const safeTitle = escapeHtml(item.title);
+    const safePoster = escapeHtml(item.poster || '');
     let imgHTML = '';
     if (item.poster) {
-        imgHTML = `<img class="card-img" src="${item.poster}" alt="${item.title}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`;
+        imgHTML = `<img class="card-img" src="${safePoster}" alt="${safeTitle}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`;
     }
     imgHTML += `<div class="card-placeholder" style="${item.poster ? 'display:none' : ''}">${defaultPosters[genre] || '🎬'}</div>`;
     card.innerHTML = `
@@ -300,7 +315,7 @@ function createCard(item, type) {
             <button class="card-action-btn" data-action="info" title="More Info">ℹ</button>
         </div>
         <div class="card-info">
-            <div class="card-title">${item.title}</div>
+            <div class="card-title">${safeTitle}</div>
             <div class="card-meta">
                 <span class="card-rating">${item.rating ? '★ ' + item.rating : ''}</span>
                 <span>${item.year || ''}</span>
@@ -321,7 +336,10 @@ function renderSlider(containerId, items, type) {
     const slider = document.getElementById(containerId);
     slider.innerHTML = '';
     if (items.length === 0) {
-        slider.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${type === 'movie' ? '🎬' : '📺'}</div><p>No ${type === 'movie' ? 'movies' : 'TV shows'} yet.<br>Click "+ Add Content" to get started!</p></div>`;
+        let icon = '🎬', msg = 'No movies yet.';
+        if (type === 'tv') { icon = '📺'; msg = 'No TV shows yet.'; }
+        else if (type === 'mixed') { icon = '⭐'; msg = 'No items in your list yet.'; }
+        slider.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${icon}</div><p>${msg}<br>Click "+ Add Content" to get started!</p></div>`;
         return;
     }
     items.forEach(item => slider.appendChild(createCard(item, type)));
@@ -340,7 +358,7 @@ function updateHero() {
         document.getElementById('heroDesc').textContent = featured.description || `A ${g.length ? g.join(', ') : 'great'} ${featured.type || 'title'}. Rating: ${featured.rating || 'N/A'}/10`;
         const bgUrl = featured.backdrop || featured.poster;
         if (bgUrl) {
-            document.getElementById('heroSection').style.backgroundImage = `url(${bgUrl})`;
+            document.getElementById('heroSection').style.backgroundImage = `url("${escapeHtml(bgUrl)}")`;
             document.getElementById('heroSection').style.backgroundSize = 'cover';
             document.getElementById('heroSection').style.backgroundPosition = 'center top';
         } else {
@@ -348,6 +366,12 @@ function updateHero() {
         }
         document.getElementById('heroPlayBtn').onclick = () => playItem(featured, featured.type || 'movie');
         document.getElementById('heroInfoBtn').onclick = () => showInfo(featured, featured.type || 'movie');
+    } else {
+        document.getElementById('heroTitle').textContent = 'Welcome to StreamFlix';
+        document.getElementById('heroDesc').textContent = 'Your personal streaming platform. Add movies via Google Drive or upload TV shows.';
+        document.getElementById('heroSection').style.backgroundImage = '';
+        document.getElementById('heroPlayBtn').onclick = null;
+        document.getElementById('heroInfoBtn').onclick = null;
     }
 }
 
@@ -379,7 +403,7 @@ function playItem(item, type) {
         subtitle.textContent = `${item.year || ''} • ${genArr(item.genre).join(', ') || ''}`;
         const driveLink = convertDriveLink(item.driveLink);
         if (driveLink) {
-            frame.innerHTML = `<iframe src="${driveLink}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
+            frame.innerHTML = `<iframe src="${escapeHtml(driveLink)}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
         } else {
             frame.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:18px;">No video source available</div>`;
         }
@@ -407,7 +431,7 @@ function renderEpisodePlaylist(tvItem) {
         div.innerHTML = `
             <div class="ep-num">${i + 1}</div>
             <div class="ep-info">
-                <div class="ep-title">${ep.name}</div>
+                <div class="ep-title">${escapeHtml(ep.name)}</div>
                 <div class="ep-size">${ep.size ? formatSize(ep.size) : (ep.driveLink ? 'Google Drive' : '')}</div>
             </div>
         `;
@@ -429,13 +453,13 @@ function playEpisode(tvItem, episode, index) {
     frame.innerHTML = '';
 
     if (episode.blobUrl) {
-        frame.innerHTML = `<video controls autoplay style="width:100%;height:100%;background:#000;"><source src="${episode.blobUrl}" type="${episode.type || 'video/mp4'}"></video>`;
+        frame.innerHTML = `<video controls autoplay style="width:100%;height:100%;background:#000;"><source src="${escapeHtml(episode.blobUrl)}" type="${escapeHtml(episode.type || 'video/mp4')}"></video>`;
     } else if (episode.driveLink) {
         const driveLink = convertDriveLink(episode.driveLink);
-        frame.innerHTML = `<iframe src="${driveLink}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
+        frame.innerHTML = `<iframe src="${escapeHtml(driveLink)}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
     } else if (episode.url) {
         const driveLink = convertDriveLink(episode.url);
-        frame.innerHTML = `<iframe src="${driveLink}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
+        frame.innerHTML = `<iframe src="${escapeHtml(driveLink)}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
     } else {
         frame.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:18px;">No video source</div>`;
     }
@@ -453,7 +477,7 @@ function showInfo(item, type) {
     const bgUrl = item.backdrop || item.poster;
     const gArr = genArr(item.genre);
     if (bgUrl) {
-        backdrop.style.backgroundImage = `url(${bgUrl})`;
+        backdrop.style.backgroundImage = `url("${escapeHtml(bgUrl)}")`;
         backdrop.innerHTML = '';
     } else {
         backdrop.style.backgroundImage = 'none';
@@ -664,7 +688,7 @@ function renderDriveEpisodeList() {
         div.dataset.index = i;
         div.innerHTML = `
             <span class="ep-number">${i + 1}</span>
-            <span class="ep-name" title="${ep.name}">${ep.name}</span>
+            <span class="ep-name" title="${escapeHtml(ep.name)}">${escapeHtml(ep.name)}</span>
             <span class="ep-type-badge drive">Drive</span>
             <button class="ep-remove" data-index="${i}">&times;</button>
         `;
@@ -701,7 +725,7 @@ function renderFileEpisodeList() {
         div.dataset.index = i;
         div.innerHTML = `
             <span class="ep-number">${i + 1}</span>
-            <span class="ep-name" title="${ep.name}">${ep.name}</span>
+            <span class="ep-name" title="${escapeHtml(ep.name)}">${escapeHtml(ep.name)}</span>
             <span style="color:#888;font-size:11px;">${formatSize(ep.size)}</span>
             <span class="ep-type-badge file">File</span>
             <button class="ep-remove" data-index="${i}">&times;</button>
