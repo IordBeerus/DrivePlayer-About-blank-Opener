@@ -285,13 +285,27 @@ body.light-mode .toggle-label { color: #333; }
 .hero-content {
     max-width: 550px;
     z-index: 2;
+    display: flex;
+    flex-direction: column;
 }
 .hero-title {
-    font-size: 52px;
+    font-size: 32px;
     font-weight: 800;
+    margin-top: auto;
     margin-bottom: 15px;
     text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
     line-height: 1.1;
+}
+.hero-logo {
+    display: block;
+    order: -1;
+    max-width: 450px;
+    max-height: 140px;
+    width: auto;
+    height: auto;
+    margin-bottom: 15px;
+    object-fit: contain;
+    filter: drop-shadow(2px 2px 8px rgba(0,0,0,0.8));
 }
 .hero-desc {
     font-size: 16px;
@@ -641,12 +655,16 @@ body.light-mode .toggle-label { color: #333; }
     border-color: #e50914;
     color: #fff;
 }
-.genre-chip input { display: none; }
+.genre-chip input {
+    accent-color: #e50914;
+    cursor: pointer;
+}
 .genre-chip:has(input:checked) {
     background: #e50914;
     border-color: #e50914;
     color: #fff;
 }
+.genre-chip input { display: none; }
 
 .edit-ep-row {
     display: flex;
@@ -952,6 +970,15 @@ body.light-mode .toggle-label { color: #333; }
     font-weight: 700;
     margin-bottom: 12px;
 }
+.info-details .info-logo {
+    display: block;
+    max-width: 320px;
+    max-height: 120px;
+    width: auto;
+    height: auto;
+    margin-bottom: 12px;
+    object-fit: contain;
+}
 .info-meta {
     display: flex;
     gap: 12px;
@@ -1055,6 +1082,27 @@ body.light-mode .toggle-label { color: #333; }
     font-size: 24px;
     color: #e50914;
     letter-spacing: 3px;
+}
+.hero-logo-preview {
+    background: #1a1a1a;
+    border: 1px dashed #444;
+    border-radius: 8px;
+    padding: 20px;
+    min-height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.hero-logo-preview img {
+    max-width: 100%;
+    max-height: 120px;
+    object-fit: contain;
+}
+.settings-btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
 }
 .bg-preview {
     margin: 15px 0;
