@@ -1,1 +1,20 @@
-copy(JSON.stringify({ movies: JSON.parse(localStorage.getItem('sf_movies')||'[]'), tvshows: JSON.parse(localStorage.getItem('sf_tvshows')||'[]') }))
+{
+  "movies": [
+    {
+      "id": "abc123",
+      "title": "Inception",
+      "description": "A thief who steals corporate secrets...",
+      "genre": ["action", "scifi", "thriller"],
+      "year": "2010",
+      "rating": "8.4",
+      "poster": "https://image.tmdb.org/t/p/w500/...",
+      "backdrop": "https://image.tmdb.org/t/p/w1280/...",
+      "logo": "",
+      "tmdbId": "27205",
+      "driveLink": "",
+      "certification": "PG-13",
+      "type": "movie"
+    }
+  ],
+  "tvshows": []
+}
