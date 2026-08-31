@@ -1,0 +1,1 @@
+copy(JSON.stringify({ movies: JSON.parse(localStorage.getItem('sf_movies')||'[]'), tvshows: JSON.parse(localStorage.getItem('sf_tvshows')||'[]') }))
