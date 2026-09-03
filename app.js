@@ -1514,13 +1514,13 @@ function videasyIframe(tmdbId, type, season, episode) {
     return `<iframe src="${escapeHtml(url)}" width="100%" height="100%" style="border:0" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>`;
 }
 
-// SuperEmbed fallback — multiembed.mov currently returns 403, so use the working Vidsrc endpoint.
+// SuperEmbed — separate fallback provider for TMDB movies and TV.
 function superembedIframe(tmdbId, type, season, episode) {
     let url;
     if (type === 'tv') {
-        url = `https://vidsrc.pm/embed/tv/${encodeURIComponent(tmdbId)}/${encodeURIComponent(season || 1)}/${encodeURIComponent(episode || 1)}`;
+        url = `https://superembed.stream/?video_id=${encodeURIComponent(tmdbId)}&tmdb=1&s=${encodeURIComponent(season || 1)}&e=${encodeURIComponent(episode || 1)}`;
     } else {
-        url = `https://vidsrc.pm/embed/movie/${encodeURIComponent(tmdbId)}`;
+        url = `https://superembed.stream/?video_id=${encodeURIComponent(tmdbId)}&tmdb=1`;
     }
     return `<iframe src="${escapeHtml(url)}" width="100%" height="100%" style="border:0" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>`;
 }
@@ -1853,19 +1853,17 @@ function clearAutoFallback() {
     fallbackLoaded = false;
 }
 
-// Attach load/error detection to the just-created iframe for a TMDB server so a
-// truly broken source advances to the next server in SERVER_ORDER, WITHOUT ever
-// interrupting playback that is already going (which used to freeze videos
-// mid-way at 25s). Safety net: only rescue an embed that never loads.
+// Attach load/error detection only in Auto mode. Manual server selection must
+// stay on the server the user picked.
 function armAutoFallback(frame, server) {
     const ifr = frame && frame.querySelector('iframe');
-    if (!ifr || !playContext) return;
+    if (!ifr || !playContext || playerServer !== 'auto') return;
     if (!fallbackStart) fallbackStart = server;
     fallbackLoaded = false;
     const onLoad = () => {
         fallbackLoaded = true;
-        // Once the embed's page is up, playback is in control — cancel the timer
-        // so smooth video is never knocked out by a watchdog.
+        // A loaded iframe is allowed to play; cross-origin player errors cannot be
+        // inspected here, so only a real load/error failure triggers fallback.
         if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
     };
     ifr.removeEventListener('load', onLoad);
@@ -1873,16 +1871,17 @@ function armAutoFallback(frame, server) {
     // Fires only when the iframe fails to load its document (a dead source).
     ifr.addEventListener('error', () => { if (!fallbackLoaded) tryAutoFallback(server); });
     if (fallbackTimer) clearTimeout(fallbackTimer);
-    // Generous dead-embed rescue: only trips if the source never loaded at all.
+    // Rescue providers that never load at all. Cross-origin players do not expose
+    // their internal video errors, so the manual server selector remains available.
     fallbackTimer = setTimeout(() => {
         if (fallbackStart && !fallbackLoaded) tryAutoFallback(server);
-    }, 45000);
+    }, 15000);
 }
 
 // Advance to the next TMDB server in the order. Stops once we've come full circle.
 function tryAutoFallback(server) {
     if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
-    if (!fallbackStart || !playContext) return;
+    if (!fallbackStart || !playContext || playerServer !== 'auto') return;
     const idx = SERVER_ORDER.indexOf(server);
     if (idx === -1) return;
     const next = SERVER_ORDER[(idx + 1) % SERVER_ORDER.length];
