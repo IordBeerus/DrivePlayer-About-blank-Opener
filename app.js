@@ -1458,13 +1458,13 @@ function toggleMyList(item, type) {
 }
 
 // ==================== PLAY ====================
-// Build a Vidking (TMDB-powered) iframe for movie or TV playback.
-function vidkingIframe(tmdbId, type, season, episode) {
+// TMDB-powered iframe for movie or TV playback.
+function tmdbIframe(tmdbId, type, season, episode) {
     let url;
     if (type === 'tv') {
-        url = `https://www.vidking.net/embed/tv/${encodeURIComponent(tmdbId)}/${encodeURIComponent(season || 1)}/${encodeURIComponent(episode || 1)}?autoPlay=true&nextEpisode=true&episodeSelector=true`;
+        url = `https://vidsrc.pm/embed/tv/${encodeURIComponent(tmdbId)}/${encodeURIComponent(season || 1)}/${encodeURIComponent(episode || 1)}`;
     } else {
-        url = `https://www.vidking.net/embed/movie/${encodeURIComponent(tmdbId)}?color=e50914&autoPlay=false`;
+        url = `https://vidsrc.pm/embed/movie/${encodeURIComponent(tmdbId)}`;
     }
     return `<iframe src="${escapeHtml(url)}" width="100%" height="100%" style="border:0" frameborder="0" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
 }
@@ -1836,12 +1836,12 @@ function effectiveServerFor(item, type) {
     // Auto: movies use Vidsrc; anime and TV retain their existing fallback behavior.
     if (type === 'movie' && item.tmdbId) return 'vidsrc';
     if (isAnime(item) && currentAnimekaiMalId) return 'animekai';
-    // Auto: TV prefers TMDB (Vidking) when an ID exists, otherwise falls back to Drive.
-    return item.tmdbId ? 'tmdb' : 'drive';
+    // Auto: TV prefers the Vidsrc TMDB player when an ID exists, otherwise falls back to Drive.
+    return item.tmdbId ? 'vidsrc' : 'drive';
 }
 
 // Ordered list used for automatic server fallback (TMDB-based sources only).
-const SERVER_ORDER = ['tmdb', 'phantom', 'vidsrc', 'vidcore', 'videasy', 'superembed', 'twoembed', 'autoembed', 'smashystream', 'vidfast', 'vidlink', 'embedsu', 'nontongo', 'animekai', 'kisskh'];
+const SERVER_ORDER = ['vidsrc', 'tmdb', 'phantom', 'vidcore', 'videasy', 'superembed', 'twoembed', 'autoembed', 'smashystream', 'vidfast', 'vidlink', 'embedsu', 'nontongo', 'animekai', 'kisskh'];
 let fallbackStart = null;
 let fallbackTimer = null;
 let fallbackLoaded = false;
@@ -1893,7 +1893,7 @@ function tryAutoFallback(server) {
 
 // Map of server key -> iframe builder (movie/tv, season, episode).
 const SERVER_IFRAME = {
-    tmdb: vidkingIframe,
+    tmdb: tmdbIframe,
     phantom: phantomIframe,
     vidsrc: vidsrcIframe,
     vidcore: vidcoreIframe,
@@ -1937,7 +1937,7 @@ function renderTmdbPlay(server) {
     if (!frame || !playContext) return;
     const { item, type, episode, season } = playContext;
     if (!item.tmdbId) return;
-    const builder = SERVER_IFRAME[server] || vidkingIframe;
+    const builder = SERVER_IFRAME[server] || tmdbIframe;
     if (type === 'movie') {
         frame.innerHTML = builder(item.tmdbId, 'movie');
         armAutoFallback(frame, server);
@@ -1955,6 +1955,8 @@ function renderPlay() {
     const epSelector = document.getElementById('episodeSelector');
     if (!playContext) return;
     const { item, type } = playContext;
+    const staleNextButton = document.getElementById('playNextEpisode');
+    if (type === 'movie' && staleNextButton) staleNextButton.remove();
     // Anime + drama via megavid.buzz. Anime (ALL genres — action, romance, mecha, isekai, etc.)
     // plays through /mal/{mal-id}/{ep}/{sub|dub} or /ani/{anilist-id}/{ep}/{sub|dub} using the
     // per-item resolved id (so each show plays ITS OWN title, not the same one). Items that carry a
@@ -2208,21 +2210,6 @@ async function renderTmdbEpisodes(tvItem, server) {
             const found = seasonInfos.find(s => String(s.sn) === String(currentSelectedSeason)) || seasonInfos[0];
             if (!found) return;
 
-            const nextButton = document.getElementById('playNextEpisode');
-            const updateNextButton = () => {
-                if (!nextButton) return;
-                const currentEpisode = Number(playContext?.episode || 0);
-                const currentSeason = String(playContext?.season || currentSelectedSeason);
-                const canAdvance = currentSeason === String(found.sn) && found.eps.some(ep => Number(ep.episode_number) === currentEpisode + 1);
-                nextButton.disabled = !canAdvance;
-                nextButton.dataset.season = String(found.sn);
-                nextButton.dataset.lastEpisode = String(Math.max(...found.eps.map(ep => Number(ep.episode_number) || 0)));
-                nextButton.onclick = () => {
-                    const nextEpisode = found.eps.find(ep => Number(ep.episode_number) === Number(playContext?.episode || 0) + 1);
-                    if (nextEpisode) playTmdbEpisode(tvItem, found.sn, nextEpisode.episode_number, server);
-                };
-            };
-
             const filteredEps = found.eps.filter(ep => {
                 if (!filterText) return true;
                 const q = filterText.toLowerCase();
@@ -2277,7 +2264,7 @@ async function renderTmdbEpisodes(tvItem, server) {
                 fragment.appendChild(card);
             });
             list.appendChild(fragment);
-            updateNextButton();
+            setupTmdbNextButton(tvItem, found.sn, server);
         };
 
         renderCurrentSeasonEpisodes();
@@ -2312,11 +2299,28 @@ function playTmdbEpisode(tvItem, season, episode, server) {
     title.textContent = tvItem.title;
     subtitle.textContent = `Season ${season || 1} • Episode ${episode}`;
     playContext = { item: tvItem, type: 'tv', season: season || 1, episode };
-    const nextButton = document.getElementById('playNextEpisode');
-    if (nextButton && nextButton.dataset.season === String(season || 1)) {
-        nextButton.disabled = nextButton.dataset.lastEpisode === String(episode);
-    }
+    setupTmdbNextButton(tvItem, season || 1, server);
     renderTmdbPlay(server);
+}
+
+function setupTmdbNextButton(tvItem, season, server) {
+    const playerContainer = document.getElementById('playerContainer');
+    const list = document.getElementById('episodePlaylist');
+    if (!playerContainer || !list) return;
+    const oldButton = document.getElementById('playNextEpisode');
+    if (oldButton) oldButton.remove();
+    const currentEpisode = Number(playContext?.episode || 0);
+    const nextCard = Array.from(list.querySelectorAll('.cineby-ep-card')).find(card =>
+        Number(card.dataset.episode) === currentEpisode + 1 && String(card.dataset.season) === String(season));
+    if (!nextCard) return;
+    const nextButton = document.createElement('button');
+    nextButton.id = 'playNextEpisode';
+    nextButton.className = 'play-next-button';
+    nextButton.type = 'button';
+    nextButton.textContent = 'Play next';
+    nextButton.title = 'Play next episode';
+    nextButton.onclick = () => nextCard.click();
+    playerContainer.appendChild(nextButton);
 }
 
 function renderEpisodePlaylist(tvItem) {
@@ -2345,7 +2349,7 @@ function playEpisode(tvItem, episode, index) {
     const frame = document.getElementById('playerFrame');
     const title = document.getElementById('playerTitle');
     const subtitle = document.getElementById('playerSubtitle');
-    const nextButton = document.getElementById('playNextEpisode');
+    const playerContainer = document.getElementById('playerContainer');
     title.textContent = tvItem.title;
     subtitle.textContent = `Season ${tvItem.season || 1} • Episode ${index + 1} - ${episode.name}`;
     playContext = { item: tvItem, type: 'tv', season: tvItem.season || 1, episode: index + 1 };
@@ -2355,23 +2359,43 @@ function playEpisode(tvItem, episode, index) {
         if (automatic && settings.autoPlayNext === false) return;
         const nextIndex = index + 1;
         if (nextIndex >= tvItem.episodes.length) return;
+        const currentNextButton = document.getElementById('playNextEpisode');
+        if (currentNextButton) currentNextButton.hidden = true;
         const nextEpisode = tvItem.episodes[nextIndex];
-        if (nextButton) nextButton.disabled = false;
         document.querySelectorAll('#episodePlaylist .ep-play-item').forEach((el, i) =>
             el.classList.toggle('active', i === nextIndex));
         try { toast(`Playing next: Episode ${nextIndex + 1}`, 'success'); } catch {}
         playEpisode(tvItem, nextEpisode, nextIndex);
     };
 
-    if (nextButton) {
-        nextButton.disabled = index + 1 >= tvItem.episodes.length;
+    const oldNextButton = document.getElementById('playNextEpisode');
+    if (oldNextButton) oldNextButton.remove();
+    if (playerContainer && index + 1 < tvItem.episodes.length) {
+        const nextButton = document.createElement('button');
+        nextButton.id = 'playNextEpisode';
+        nextButton.className = 'play-next-button';
+        nextButton.type = 'button';
+        nextButton.textContent = 'Play next';
+        nextButton.hidden = true;
         nextButton.onclick = playNext;
+        playerContainer.appendChild(nextButton);
     }
 
     if (episode.blobUrl) {
         frame.innerHTML = `<video id="driveVideoEl" controls autoplay style="width:100%;height:100%;background:#000;"><source src="${escapeHtml(episode.blobUrl)}" type="${escapeHtml(episode.type || 'video/mp4')}"></video>`;
         const video = document.getElementById('driveVideoEl');
-        if (video) video.addEventListener('ended', () => playNext(true));
+        if (video) video.addEventListener('ended', () => {
+            const nextButton = document.getElementById('playNextEpisode');
+            if (nextButton) {
+                nextButton.hidden = false;
+                nextButton.classList.add('episode-ended');
+            }
+            if (settings.autoPlayNext !== false) {
+                setTimeout(() => {
+                    if (nextButton && !nextButton.hidden) playNext(true);
+                }, 5000);
+            }
+        });
     } else if (episode.driveLink) {
         const driveLink = convertDriveLink(episode.driveLink);
         frame.innerHTML = `<iframe src="${escapeHtml(driveLink)}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
