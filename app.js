@@ -1514,13 +1514,13 @@ function videasyIframe(tmdbId, type, season, episode) {
     return `<iframe src="${escapeHtml(url)}" width="100%" height="100%" style="border:0" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>`;
 }
 
-// SuperEmbed — https://multiembed.mov / https://superembed.stream
+// SuperEmbed fallback — multiembed.mov currently returns 403, so use the working Vidsrc endpoint.
 function superembedIframe(tmdbId, type, season, episode) {
     let url;
     if (type === 'tv') {
-        url = `https://multiembed.mov/?video_id=${encodeURIComponent(tmdbId)}&tmdb=1&s=${encodeURIComponent(season || 1)}&e=${encodeURIComponent(episode || 1)}`;
+        url = `https://vidsrc.pm/embed/tv/${encodeURIComponent(tmdbId)}/${encodeURIComponent(season || 1)}/${encodeURIComponent(episode || 1)}`;
     } else {
-        url = `https://multiembed.mov/?video_id=${encodeURIComponent(tmdbId)}&tmdb=1`;
+        url = `https://vidsrc.pm/embed/movie/${encodeURIComponent(tmdbId)}`;
     }
     return `<iframe src="${escapeHtml(url)}" width="100%" height="100%" style="border:0" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>`;
 }
@@ -1833,8 +1833,8 @@ function serverBtnActive() {
 function effectiveServerFor(item, type) {
     if (playerServer === 'drive') return 'drive';
     if (['tmdb','phantom','vidsrc','vidcore','videasy','superembed','twoembed','autoembed','smashystream','vidfast','vidlink','embedsu','nontongo','animekai','kisskh'].includes(playerServer)) return playerServer;
-    // Auto: movies use SuperEmbed; anime and TV retain their existing fallback behavior.
-    if (type === 'movie' && item.tmdbId) return 'superembed';
+    // Auto: movies use Vidsrc; anime and TV retain their existing fallback behavior.
+    if (type === 'movie' && item.tmdbId) return 'vidsrc';
     if (isAnime(item) && currentAnimekaiMalId) return 'animekai';
     // Auto: TV prefers TMDB (Vidking) when an ID exists, otherwise falls back to Drive.
     return item.tmdbId ? 'tmdb' : 'drive';
@@ -2208,6 +2208,21 @@ async function renderTmdbEpisodes(tvItem, server) {
             const found = seasonInfos.find(s => String(s.sn) === String(currentSelectedSeason)) || seasonInfos[0];
             if (!found) return;
 
+            const nextButton = document.getElementById('playNextEpisode');
+            const updateNextButton = () => {
+                if (!nextButton) return;
+                const currentEpisode = Number(playContext?.episode || 0);
+                const currentSeason = String(playContext?.season || currentSelectedSeason);
+                const canAdvance = currentSeason === String(found.sn) && found.eps.some(ep => Number(ep.episode_number) === currentEpisode + 1);
+                nextButton.disabled = !canAdvance;
+                nextButton.dataset.season = String(found.sn);
+                nextButton.dataset.lastEpisode = String(Math.max(...found.eps.map(ep => Number(ep.episode_number) || 0)));
+                nextButton.onclick = () => {
+                    const nextEpisode = found.eps.find(ep => Number(ep.episode_number) === Number(playContext?.episode || 0) + 1);
+                    if (nextEpisode) playTmdbEpisode(tvItem, found.sn, nextEpisode.episode_number, server);
+                };
+            };
+
             const filteredEps = found.eps.filter(ep => {
                 if (!filterText) return true;
                 const q = filterText.toLowerCase();
@@ -2262,6 +2277,7 @@ async function renderTmdbEpisodes(tvItem, server) {
                 fragment.appendChild(card);
             });
             list.appendChild(fragment);
+            updateNextButton();
         };
 
         renderCurrentSeasonEpisodes();
@@ -2296,6 +2312,10 @@ function playTmdbEpisode(tvItem, season, episode, server) {
     title.textContent = tvItem.title;
     subtitle.textContent = `Season ${season || 1} • Episode ${episode}`;
     playContext = { item: tvItem, type: 'tv', season: season || 1, episode };
+    const nextButton = document.getElementById('playNextEpisode');
+    if (nextButton && nextButton.dataset.season === String(season || 1)) {
+        nextButton.disabled = nextButton.dataset.lastEpisode === String(episode);
+    }
     renderTmdbPlay(server);
 }
 
@@ -2754,7 +2774,11 @@ async function tmdbJson(path) {
             'Authorization': effectiveTmdbAuth()
         }
     });
-    if (!res.ok) throw new Error(res.status === 404 ? '404 - Not found (check the ID, or type a title to search)' : `HTTP ${res.status}`);
+    if (!res.ok) {
+        if (res.status === 401) throw new Error('TMDB API key invalid or expired. Add a valid Bearer token in Settings.');
+        if (res.status === 403) throw new Error('TMDB API access denied. Check the API key in Settings.');
+        throw new Error(res.status === 404 ? '404 - Not found (check the ID, or type a title to search)' : `HTTP ${res.status}`);
+    }
     return res.json();
 }
 
