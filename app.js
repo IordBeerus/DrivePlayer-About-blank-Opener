@@ -68,8 +68,8 @@ function trimLibraryForStorage() {
     if (dropT > 0) tvShows = tvShows.slice(dropT);
 }
 
-// Auto-loads the shared library for first-time visitors (empty library): first tries the
-// hosted JSON, then auto-runs the TMDB genre loader so movies/shows/anime appear with no clicks.
+// Auto-loads the full library on every open so the Load Library button isn't needed:
+// first tries the hosted JSON, then always auto-runs the TMDB genre loader to top up any missing titles.
 async function autoLoadHostedLibrary() {
     const alreadyHasData = movies.length > 0 || tvShows.length > 0;
     if (alreadyHasData) return;
@@ -82,23 +82,23 @@ async function autoLoadHostedLibrary() {
                 const m = Array.isArray(data.movies) ? data.movies.filter(x => x && x.title) : [];
                 const t = Array.isArray(data.tvshows) ? data.tvshows.filter(x => x && x.title) : [];
                 if (m.length || t.length) {
-                    movies = m;
-                    tvShows = t;
-                    saveData();
-                    refreshCurrent();
-                    loaded = true;
-                    // Scan the freshly-loaded library and auto-add any missing
-                    // brand logos for movies, TV shows and anime (by TMDB id).
-                    enrichMissingLogos().catch(() => {});
+                    const hadNoData = !(movies.length || tvShows.length);
+                    if (hadNoData) {
+                        movies = m;
+                        tvShows = t;
+                        saveData();
+                        refreshCurrent();
+                        loaded = true;
+                        enrichMissingLogos().catch(() => {});
+                    }
                 }
             }
         } catch (e) { /* fall through to TMDB auto-load */ }
     }
-    if (!loaded) {
-        const before = movies.length + tvShows.length;
-        try { await loadPopularContent(true); } catch (e) { /* no auto-load if TMDB fails */ }
-        if (movies.length + tvShows.length > before && typeof toast === 'function') toast('Library loaded!');
-    }
+    // Always auto-load popular TMDB library on open — no button press needed (adds only missing titles, skips dupes)
+    const before = movies.length + tvShows.length;
+    try { await loadPopularContent(true); } catch (e) { /* no auto-load if TMDB fails */ }
+    if (movies.length + tvShows.length > before && typeof toast === 'function') toast('Library loaded!');
 }
 
 function generateId() {
@@ -1712,16 +1712,35 @@ document.addEventListener('click', async (e) => {
         else { b.style.background = 'rgba(255,255,255,0.08)'; b.style.color = '#fff'; b.style.border = '1px solid rgba(255,255,255,0.12)'; }
     });
     if (playContext && isAnime(playContext.item)) {
-        // if we don't have an AniDB id yet, try to resolve it now so the switch actually does something
+        const item = playContext.item;
+        const itemKey = String(item.id);
+        const hasMal = currentAnimekaiMalId || item.malId || item.mal_id || item.anilistId || item.anilist_id || storedAnimeIds[itemKey];
+        if (!hasMal && !itemKey.startsWith('ak_')) {
+            try {
+                const ttype = item.type || playContext.type || '';
+                let imdbId = item.imdbId || item.imdb_id || '';
+                if (item.tmdbId && !imdbId) imdbId = (await fetchImdbIdFromTmdb(item.tmdbId, ttype)) || '';
+                const altTitles = [item.title_english, item.title_japanese, ...(item.title_synonyms||[])].filter(Boolean);
+                let tmdbTitle = item.title;
+                if (item.tmdbId) { try { const td = await tmdbJson(`/${ttype}/${encodeURIComponent(item.tmdbId)}`); if (td) { tmdbTitle = td.title || td.name || tmdbTitle; if (td.original_title || td.original_name) altTitles.push(td.original_title || td.original_name); } } catch {} }
+                const res = await fetchAnimekaiMalId(tmdbTitle, altTitles, item.year || '', ttype, imdbId);
+                if (res && playContext && String(playContext.item.id) === itemKey) {
+                    currentAnimekaiMalId = res.id;
+                    storedAnimeIds[itemKey] = res.id;
+                    storedAnimeSrc[itemKey] = res.src || 'mal';
+                    if (imdbId) item.imdbId = imdbId;
+                }
+            } catch {}
+        }
         if (!currentAnidbId) {
             try {
-                const id = await fetchAnidbId(playContext.item.title);
+                const id = await fetchAnidbId(item.title);
                 if (id) currentAnidbId = id;
             } catch {}
         }
         const frame = document.getElementById('playerFrame');
-        if (frame) frame.innerHTML = '<div class="live-loading">Switching to ' + (lang === 'dub' ? 'Dubbed' : 'Subbed') + '…</div>';
-        try { toast('Switched to ' + (lang === 'dub' ? 'Dubbed' : 'Subbed'), 'success'); } catch {}
+        if (frame) frame.innerHTML = '<div class="live-loading">Switching to ' + (lang === 'dub' ? 'Dubbed (English)' : 'Subbed (Japanese + English subs)') + '…</div>';
+        try { toast('Switched to ' + (lang === 'dub' ? 'Dubbed — English audio' : 'Subbed — Japanese with English subtitles'), 'success'); } catch {}
         renderPlay();
     }
 });
