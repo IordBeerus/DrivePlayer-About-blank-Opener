@@ -1458,13 +1458,13 @@ function toggleMyList(item, type) {
 }
 
 // ==================== PLAY ====================
-// TMDB-powered iframe for movie or TV playback.
+// VidKing TMDB-powered iframe for movie or TV playback.
 function tmdbIframe(tmdbId, type, season, episode) {
     let url;
     if (type === 'tv') {
-        url = `https://vidsrc.pm/embed/tv/${encodeURIComponent(tmdbId)}/${encodeURIComponent(season || 1)}/${encodeURIComponent(episode || 1)}`;
+        url = `https://www.vidking.net/embed/tv/${encodeURIComponent(tmdbId)}/${encodeURIComponent(season || 1)}/${encodeURIComponent(episode || 1)}?autoPlay=true&nextEpisode=true&episodeSelector=true`;
     } else {
-        url = `https://vidsrc.pm/embed/movie/${encodeURIComponent(tmdbId)}`;
+        url = `https://www.vidking.net/embed/movie/${encodeURIComponent(tmdbId)}?color=e50914&autoPlay=false`;
     }
     return `<iframe src="${escapeHtml(url)}" width="100%" height="100%" style="border:0" frameborder="0" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
 }
@@ -1836,12 +1836,12 @@ function effectiveServerFor(item, type) {
     // Auto: movies use Vidsrc; anime and TV retain their existing fallback behavior.
     if (type === 'movie' && item.tmdbId) return 'vidsrc';
     if (isAnime(item) && currentAnimekaiMalId) return 'animekai';
-    // Auto: TV prefers the Vidsrc TMDB player when an ID exists, otherwise falls back to Drive.
-    return item.tmdbId ? 'vidsrc' : 'drive';
+    // Auto: TV prefers VidKing when an ID exists, otherwise falls back to Drive.
+    return item.tmdbId ? 'tmdb' : 'drive';
 }
 
 // Ordered list used for automatic server fallback (TMDB-based sources only).
-const SERVER_ORDER = ['vidsrc', 'tmdb', 'phantom', 'vidcore', 'videasy', 'superembed', 'twoembed', 'autoembed', 'smashystream', 'vidfast', 'vidlink', 'embedsu', 'nontongo', 'animekai', 'kisskh'];
+const SERVER_ORDER = ['tmdb', 'phantom', 'vidsrc', 'vidcore', 'videasy', 'superembed', 'twoembed', 'autoembed', 'smashystream', 'vidfast', 'vidlink', 'embedsu', 'nontongo', 'animekai', 'kisskh'];
 let fallbackStart = null;
 let fallbackTimer = null;
 let fallbackLoaded = false;
