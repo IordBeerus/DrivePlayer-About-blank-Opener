@@ -1833,9 +1833,10 @@ function serverBtnActive() {
 function effectiveServerFor(item, type) {
     if (playerServer === 'drive') return 'drive';
     if (['tmdb','phantom','vidsrc','vidcore','videasy','superembed','twoembed','autoembed','smashystream','vidfast','vidlink','embedsu','nontongo','animekai','kisskh'].includes(playerServer)) return playerServer;
-    // Auto: for anime with AnimeKai available, prefer it; otherwise TMDB
+    // Auto: movies use SuperEmbed; anime and TV retain their existing fallback behavior.
+    if (type === 'movie' && item.tmdbId) return 'superembed';
     if (isAnime(item) && currentAnimekaiMalId) return 'animekai';
-    // Auto: prefer TMDB (Vidking) when an ID exists, otherwise fall back to Drive.
+    // Auto: TV prefers TMDB (Vidking) when an ID exists, otherwise falls back to Drive.
     return item.tmdbId ? 'tmdb' : 'drive';
 }
 

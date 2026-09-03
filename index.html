@@ -539,7 +539,6 @@
 
             <div class="settings-tabs" role="tablist" aria-label="Settings sections">
                 <button class="settings-tab active" data-settings-tab="cloak" role="tab">Cloak</button>
-                <button class="settings-tab" data-settings-tab="mangadex" role="tab">MangaDex</button>
                 <button class="settings-tab" data-settings-tab="api" role="tab">API</button>
                 <button class="settings-tab" data-settings-tab="background" role="tab">Background</button>
                 <button class="settings-tab" data-settings-tab="hero" role="tab">Hero Logo</button>
@@ -593,28 +592,6 @@
                     <small class="help-text">Pick a PNG/JPG — it’s saved as a local data URL so it’s never blocked by an external host. Shows instantly next to MILKBOX.</small>
                 </div>
                 <button class="btn-submit" id="applyCloakBtn">Apply Cloak</button>
-            </div>
-            </div>
-
-            <!-- MangaDex — Authorize so books can be read -->
-            <div class="settings-page" data-settings-page="mangadex">
-            <div class="settings-section" id="mangadexAuthSection">
-                <h3 class="settings-section-title">MangaDex — Authorize to Read</h3>
-                <p class="help-text" style="margin-bottom:10px">Paste the <code>access_token</code> you got from <code>POST https://auth.mangadex.org/.../token</code> (the Python you ran). It’s stored locally and sent only to <code>api.mangadex.org</code> so chapter pages can load. No password stored. <a href="https://api.mangadex.org/docs.html" target="_blank" style="color:#ffb6d8">Docs</a></p>
-                <div class="form-group">
-                    <label for="mangadexAccessToken">Access Token</label>
-                    <input type="text" id="mangadexAccessToken" placeholder="eyJhbGci...">
-                </div>
-                <div class="form-group">
-                    <label for="mangadexRefreshToken">Refresh Token (optional)</label>
-                    <input type="text" id="mangadexRefreshToken" placeholder="eyJhbGci...">
-                </div>
-                <div class="form-group" id="mangadexAuthStatus" style="display:none; padding:8px 12px; border-radius:6px; font-size:13px;"></div>
-                <div class="settings-btn-row">
-                    <button class="btn-submit" id="saveMangadexTokenBtn">Save & Authorize</button>
-                    <button class="btn-secondary" id="clearMangadexTokenBtn" style="display:none">Clear</button>
-                </div>
-                <small class="help-text">Tokens are saved in <code>localStorage.mangadex_token</code> and auto-sent as <code>Authorization: Bearer …</code> for chapter pages. Run your Python again when it expires to get a fresh pair.</small>
             </div>
             </div>
 
