@@ -71,7 +71,7 @@ function trimLibraryForStorage() {
 // Auto-loads the shared library for first-time visitors (empty library): first tries the
 // hosted JSON, then auto-runs the TMDB genre loader so movies/shows/anime appear with no clicks.
 async function autoLoadHostedLibrary() {
-    const alreadyHasData = (movies.length || tvShows.length) || localStorage.getItem('sf_movies') || localStorage.getItem('sf_tvshows');
+    const alreadyHasData = movies.length > 0 || tvShows.length > 0;
     if (alreadyHasData) return;
     let loaded = false;
     if (HOSTED_LIBRARY_URL) {
@@ -3605,6 +3605,14 @@ document.getElementById('settingsBtn').addEventListener('click', () => {
     });
 });
 
+document.querySelectorAll('.settings-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        const target = tab.dataset.settingsTab;
+        document.querySelectorAll('.settings-tab').forEach(item => item.classList.toggle('active', item === tab));
+        document.querySelectorAll('.settings-page').forEach(page => page.classList.toggle('active', page.dataset.settingsPage === target));
+    });
+});
+
 document.getElementById('applyCloakBtn').addEventListener('click', () => {
     const tmdbInput = document.getElementById('tmdbApiKey');
     settings.tmdbAuth = tmdbInput ? tmdbInput.value.trim() : settings.tmdbAuth;
@@ -3759,12 +3767,27 @@ const mangadexMangaCache = new Map();
 async function resolveMangadexMangaId(title) {
     const key = String(title||'').toLowerCase().trim();
     if (!key) return null;
+    const knownIds = {
+        'one piece': 'a1c7c817-4e59-43b7-9365-09675a149a6f'
+    };
+    if (knownIds[key]) return knownIds[key];
     if (mangadexMangaCache.has(key)) return mangadexMangaCache.get(key);
     try {
-        const res = await fetch(`https://api.mangadex.org/manga?title=${encodeURIComponent(title)}&limit=5&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&includes[]=cover_art`, { headers: mangadexHeaders() });
+        const res = await fetch(`/api/manga/search?title=${encodeURIComponent(title)}`, { headers: mangadexHeaders(), cache: 'no-store' });
         if (!res.ok) throw new Error('search failed');
         const j = await res.json();
-        const id = j.data && j.data[0] && j.data[0].id;
+        const normalize = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        const wanted = normalize(title);
+        const exact = (j.data || []).find(manga =>
+            Object.values(manga.attributes?.title || {}).some(candidate => normalize(candidate) === wanted)
+        ) || (j.data || []).find(manga => {
+            const aliases = (manga.attributes?.altTitles || []).flatMap(alt => Object.values(alt || {}));
+            return aliases.some(candidate => normalize(candidate) === wanted);
+        }) || (j.data || []).find(manga => {
+            const titles = Object.values(manga.attributes?.title || {});
+            return titles.some(candidate => normalize(candidate).includes(wanted) || wanted.includes(normalize(candidate)));
+        }) || j.data?.[0];
+        const id = exact?.id || null;
         if (id) mangadexMangaCache.set(key, id);
         return id || null;
     } catch { return null; }
@@ -3983,17 +4006,9 @@ function renderLiveTab(section) {
     }
 }
 
-// ==================== MANGA (Jikan REST API v4) ====================
-const MANGA_API_BASE = 'https://api.tenrai.org/v1'; // TENRAI ONLY for manga — https://api.tenrai.org/documentation#tag/manga/GET/manga/ids — nothing else uses this
-// Tenrai manga/ids endpoint (requires Server Key) — used ONLY for manga, nothing else.
-// We try it first; if no key, we fall back to the public /manga and /top/manga endpoints which work without a key.
-async function fetchTenraiMangaIds() {
-    try {
-        const res = await fetch(`${MANGA_API_BASE}/manga/ids?limit=25`, { headers: { Accept: 'application/json' } });
-        if (!res.ok) throw new Error('ids requires Server Key');
-        return await res.json();
-    } catch { return null; }
-}
+// ==================== MANGA (Tenrai/Jikan-compatible REST API) ====================
+const MANGA_API_BASE = 'https://api.tenrai.org/v1';
+const JIKAN_MANGA_API_BASE = 'https://api.jikan.moe/v4';
 const MANGA_PER_PAGE = 24;
 const MANGA_TYPE_OPTIONS = [
     { id: 'manga', label: 'Manga' },
@@ -4084,9 +4099,9 @@ function mangaItemToItem(m) {
     const isoDate = published.from ? new Date(published.from) : null;
     const year = isoDate && !Number.isNaN(isoDate.getTime()) ? String(isoDate.getFullYear()) : (m?.year ? String(m.year) : '');
     const allGenres = [
-        ...(Array.isArray(m?.genres) ? m.genres.map(g => g.name.toLowerCase()) : []),
-        ...(Array.isArray(m?.themes) ? m.themes.map(g => g.name.toLowerCase()) : []),
-        ...(Array.isArray(m?.demographics) ? m.demographics.map(g => g.name.toLowerCase()) : [])
+        ...(Array.isArray(m?.genres) ? m.genres.map(g => String(g?.name || '').toLowerCase()).filter(Boolean) : []),
+        ...(Array.isArray(m?.themes) ? m.themes.map(g => String(g?.name || '').toLowerCase()).filter(Boolean) : []),
+        ...(Array.isArray(m?.demographics) ? m.demographics.map(g => String(g?.name || '').toLowerCase()).filter(Boolean) : [])
     ];
     const genre = allGenres.length ? allGenres : ['manga'];
     const chapterTotal = Number.isFinite(m?.chapters) && m.chapters > 0 ? `Ch. ${m.chapters}` : (m?.chapters ? `Ch. ${m.chapters}` : '');
@@ -4168,15 +4183,28 @@ async function fetchMangaList(page, type) {
     liveFed.manga = 1;
     st.lastRequestAt = now;
     try {
-        // Touch the Tenrai manga/ids endpoint (manga ONLY, nothing else) — per https://api.tenrai.org/documentation#tag/manga/GET/manga/ids
-        try { await fetchTenraiMangaIds(); } catch {}
         const queryType = type || st.type || '';
-        const data = await fetchJikanJson(getMangaRequestUrl(page || 1, queryType), 1);
+        const tenraiUrl = getMangaRequestUrl(page || 1, queryType);
+        let data;
+        try {
+            data = await fetchJikanJson(tenraiUrl, 1);
+        } catch (tenraiError) {
+            // Tenrai and Jikan expose the same response shape; keep Jikan as a real fallback.
+            const jikanUrl = `${JIKAN_MANGA_API_BASE}${tenraiUrl.slice(MANGA_API_BASE.length)}`;
+            data = await fetchJikanJson(jikanUrl, 1);
+        }
         const entries = Array.isArray(data?.data) ? data.data : [];
         if (!entries.length) {
             throw new Error('No manga entries returned');
         }
-        liveState.manga.items = entries.map(mangaItemToItem);
+        liveState.manga.items = entries.map((entry, index) => {
+            try { return mangaItemToItem(entry); }
+            catch (error) {
+                console.error('Manga item error', index, error);
+                return null;
+            }
+        }).filter(Boolean);
+        if (!liveState.manga.items.length) throw new Error('Manga entries could not be rendered');
         liveState.manga.page = page || 1;
         liveState.manga.type = queryType;
         liveState.manga.totalPages = Math.max(1, data?.pagination?.last_visible_page || 1);
@@ -4194,20 +4222,17 @@ async function fetchMangaList(page, type) {
         // enrich covers with Tenrai pictures (fire-and-forget, updates cards in place)
         try { enrichMangaCovers(liveState.manga.items); } catch {}
     } catch (e) {
+        console.error('Manga feed error', e);
         const fallbackItems = mangaFallbackItems();
         liveState.manga.items = fallbackItems.map(mangaItemToItem);
         liveState.manga.page = 1;
         liveState.manga.type = type || st.type || '';
         liveState.manga.totalPages = 1;
-        if (grid) {
-            grid.innerHTML = '';
-        }
+        if (grid) grid.innerHTML = '';
         if (pager) {
             pager.style.display = 'none';
         }
-        if (grid && !(grid.textContent.trim() && !grid.innerHTML.includes('live-loading'))) {
-            renderMangaGrid(1);
-        }
+        if (grid) renderMangaGrid(1);
     } finally {
         delete liveFed.manga;
         renderMangaGrid(liveState.manga.page || 1);
@@ -4412,14 +4437,26 @@ function showMangaReader(m) {
             let chapterData = { data: [] };
             // try MangaDex first if we can resolve a MangaDex ID for this title (authorized token helps)
             try {
-                const mdId = await resolveMangadexMangaId(detail?.title || m.title || '');
+                const mdTitle = detail?.title || m.title || '';
+                const mdId = await resolveMangadexMangaId(mdTitle);
                 if (mdId) {
-                    const r = await fetch(`https://api.mangadex.org/manga/${encodeURIComponent(mdId)}/feed?limit=50&translatedLanguage[]=en&order[chapter]=asc&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&includes[]=scanlation_group`, { headers: mangadexHeaders(), cache: 'no-store' });
-                    if (r.ok) {
-                        const j = await r.json();
-                        if (Array.isArray(j.data) && j.data.length) {
-                            chapterData = { data: j.data.map(c => ({ mal_id: c.id, chapter: c.attributes.chapter || c.attributes.chapter, title: c.attributes.title ? `${c.attributes.chapter ? 'Ch. '+c.attributes.chapter+' — ' : ''}${c.attributes.title}` : `Chapter ${c.attributes.chapter || ''}`.trim() })) };
+                    const feedUrls = [`/api/manga/${encodeURIComponent(mdId)}/feed`];
+                    for (const feedUrl of feedUrls) {
+                        for (let attempt = 0; attempt < 3; attempt++) {
+                            try {
+                                const r = await fetch(feedUrl, { cache: 'no-store' });
+                                if (r.status === 429) { await new Promise(resolve => setTimeout(resolve, 700 * (attempt + 1))); continue; }
+                                if (!r.ok) break;
+                                const j = await r.json();
+                                if (Array.isArray(j.data) && j.data.length) {
+                                    chapterData = { data: j.data.map(c => ({ mal_id: c.id, chapter: c.attributes.chapter, title: c.attributes.title ? `${c.attributes.chapter ? 'Ch. '+c.attributes.chapter+' — ' : ''}${c.attributes.title}` : `Chapter ${c.attributes.chapter || ''}`.trim() })) };
+                                    break;
+                                }
+                                break;
+                            }
+                            catch (feedError) { if (attempt === 2) console.warn('MangaDex feed error', feedError); }
                         }
+                        if (chapterData.data.length) break;
                     }
                 }
             } catch {}
@@ -4442,31 +4479,13 @@ function showMangaReader(m) {
                 id: String(c?.mal_id ?? c?.chapter ?? c?.id ?? index + 1),
                 name: c?.title || c?.name || `Chapter ${c?.chapter ?? index + 1}`
             })) : [];
-            // If API returned no chapters, generate from total count so reader is usable
-            if (!mangaReader.chapters.length) {
-                const total = parseInt(detail?.chapters ?? m?.chapters ?? 0) || 0;
-                const strCh = String(detail?.chapters ?? m?.chapters ?? '');
-                let count = 0;
-                if (total > 0 && total < 500) count = Math.min(total, 30);
-                else if (strCh.includes('+') || total >= 500) count = 20;
-                else count = 12;
-                if (count > 0) {
-                    mangaReader.chapters = Array.from({ length: count }, (_, i) => ({ id: String(i + 1), name: `Chapter ${i + 1}` }));
-                }
-            }
             renderReaderDetail(detail);
             if (mangaReader.chapters.length) {
                 // Whole book mode: load all chapters as one continuous scroll
                 mrEl('mangaReadPages').innerHTML = '<div class="live-loading">Loading whole book…</div>';
                 mrEl('mangaReadChapterLabel').textContent = `Whole Book — ${mangaReader.chapters.length} chapters`;
-                // fetch cover gallery for dummy pages
-                let pics = await fetchMangaPictures(mangaReader.mangaId);
-                if (!pics || !pics.length) {
-                    const cover = detail?.images?.jpg?.large_image_url || detail?.images?.jpg?.image_url || detail?.images?.webp?.large_image_url || detail?.images?.webp?.image_url || m.poster || makeSvgCover(detail?.title || m.title, 'Manga');
-                    pics = cover ? [cover] : [];
-                }
                 const book = [];
-                // Build whole book: headers + real pages (covers + actual chapter pages when available)
+                // Build the reader from real MangaDex chapter pages.
                 for (let cIdx = 0; cIdx < mangaReader.chapters.length; cIdx++) {
                     const ch = mangaReader.chapters[cIdx];
                     book.push({ image: '', title: ch.name, isHeader: true, chapterId: ch.id });
@@ -4474,7 +4493,7 @@ function showMangaReader(m) {
                     // try real MangaDx pages if this chapter is a real UUID
                     if (String(ch.id).includes('-') && String(ch.id).length >= 32) {
                         try {
-                            const r = await fetch(`https://api.mangadex.org/at-home/server/${encodeURIComponent(ch.id)}`, { headers: mangadexHeaders(), cache: 'no-store' });
+                            const r = await fetch(`/api/chapter/${encodeURIComponent(ch.id)}`, { cache: 'no-store' });
                             if (r.ok) {
                                 const j = await r.json();
                                 const base = j.baseUrl || j.base_url;
@@ -4484,37 +4503,26 @@ function showMangaReader(m) {
                             }
                         } catch {}
                     }
-                    if (!pages.length) {
-                        const perCh = 3;
-                        for (let p=0; p<perCh; p++) {
-                            const img = pics.length ? pics[(cIdx*perCh + p) % pics.length] : '';
-                            if (img) book.push({ image: img, title: `${ch.name} — Page ${p+1}`, chapterId: ch.id });
-                        }
-                    } else {
-                        pages.forEach((url, idx) => book.push({ image: url, title: `${ch.name} — Page ${idx+1}`, chapterId: ch.id }));
-                    }
+                    pages.forEach((url, idx) => book.push({ image: url, title: `${ch.name} — Page ${idx+1}`, chapterId: ch.id }));
                     // update progress in whole-book loading
                     if (cIdx % 5 === 0) mrEl('mangaReadPages').innerHTML = `<div class="live-loading">Loading whole book… ${cIdx+1}/${mangaReader.chapters.length} chapters</div>`;
                 }
                 mangaReader.images = book;
+                if (!mangaReader.images.some(page => page.image)) {
+                    mrEl('mangaReadPages').innerHTML = '<div class="live-error">No readable chapter pages are available for this manga.</div>';
+                    return;
+                }
                 mangaReader.currentId = mangaReader.chapters[0].id;
                 renderChapterPages();
                 updateReaderNav();
                 renderChapterDrawer();
             } else {
-                const cover = detail?.images?.jpg?.large_image_url || detail?.images?.jpg?.image_url || detail?.images?.webp?.large_image_url || detail?.images?.webp?.image_url || makeSvgCover(detail?.title || m.title, 'Manga');
-                mangaReader.images = cover ? [{ image: cover, title: detail?.title || m.title || 'Cover' }] : [];
-                renderChapterPages();
-                mrEl('mangaReadChapterLabel').textContent = detail?.title || 'Details';
-                updateReaderNav();
-                renderChapterDrawer();
+                mrEl('mangaReadPages').innerHTML = '<div class="live-error">No readable chapters are available for this manga.</div>';
+                mrEl('mangaReadChapterLabel').textContent = 'No chapters';
             }
         } catch (e) {
-            const cover = m.poster || makeSvgCover(m.title || 'Manga', 'Manga');
-            mangaReader.images = [{ image: cover, title: m.title || 'Manga cover' }];
-            renderChapterPages();
-            mrEl('mangaReadChapterLabel').textContent = m.title || 'Manga';
-            renderChapterDrawer();
+            mrEl('mangaReadPages').innerHTML = '<div class="live-error">Could not load readable manga chapters.</div>';
+            mrEl('mangaReadChapterLabel').textContent = 'Unavailable';
             updateReaderNav();
         }
     })();
@@ -4542,7 +4550,7 @@ async function openChapter(chId) {
     // If this is a MangaDex chapter (UUID), try the authorized at-home server first so real pages load
     if (String(chId).includes('-') && String(chId).length >= 32) {
         try {
-            const r = await fetch(`https://api.mangadex.org/at-home/server/${encodeURIComponent(chId)}`, { headers: mangadexHeaders(), cache: 'no-store' });
+            const r = await fetch(`/api/chapter/${encodeURIComponent(chId)}`, { cache: 'no-store' });
             if (r.ok) {
                 const j = await r.json();
                 const base = j.baseUrl || j.base_url;
@@ -4561,34 +4569,7 @@ async function openChapter(chId) {
             }
         } catch {}
     }
-    try {
-        const res = await fetch(`${MANGA_API_BASE}/manga/${encodeURIComponent(mangaReader.mangaId)}/pictures`);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        const pictures = Array.isArray(data?.data) ? data.data : [];
-        mangaReader.images = pictures.length ? pictures.map(p => ({
-            image: p?.jpg?.large_image_url || p?.jpg?.image_url || p?.webp?.large_image_url || p?.webp?.image_url || '',
-            title: ch?.name || 'Manga page'
-        })).filter(p => p.image) : [];
-        if (!mangaReader.images.length) {
-            const cover = mangaReader.info?.images?.jpg?.large_image_url || mangaReader.info?.images?.jpg?.image_url || '';
-            if (cover) mangaReader.images = [{ image: cover, title: ch?.name || 'Cover' }];
-        }
-        mrEl('mangaReadChapterLabel').textContent = ch?.name || chId;
-        renderChapterPages();
-        updateReaderNav();
-        renderChapterDrawer();
-        const body = mrEl('mangaReadBody');
-        if (body) body.scrollTop = 0;
-    } catch (e) {
-        const cover = mangaReader.info?.images?.jpg?.large_image_url || mangaReader.info?.images?.jpg?.image_url || '';
-        if (cover) {
-            mangaReader.images = [{ image: cover, title: ch?.name || 'Cover' }];
-            renderChapterPages();
-        } else {
-            pagesEl.innerHTML = '<div class="live-error">No manga pages were returned by Jikan for this entry.</div>';
-        }
-    }
+    pagesEl.innerHTML = '<div class="live-error">This chapter has no readable pages.</div>';
 }
 
 function renderChapterPages() {
@@ -4917,9 +4898,21 @@ document.querySelectorAll('.mobile-nav-link').forEach(link => {
 
 const mobileMenuBtn = document.getElementById('mobileMenuBtn');
 if (mobileMenuBtn) {
-    mobileMenuBtn.addEventListener('click', () => {
-        document.getElementById('mobileNavPanel').classList.toggle('open');
-    });
+    const mobileNavPanel = document.getElementById('mobileNavPanel');
+    let menuCloseTimer;
+    const positionMenu = () => {
+        const buttonRect = mobileMenuBtn.getBoundingClientRect();
+        mobileNavPanel.style.left = `${buttonRect.left}px`;
+        mobileNavPanel.style.right = 'auto';
+        mobileNavPanel.style.top = `${buttonRect.bottom + 6}px`;
+    };
+    const openMenu = () => { clearTimeout(menuCloseTimer); positionMenu(); mobileNavPanel.classList.add('open'); };
+    const closeMenuSoon = () => { menuCloseTimer = setTimeout(() => mobileNavPanel.classList.remove('open'), 180); };
+    mobileMenuBtn.addEventListener('click', () => mobileNavPanel.classList.toggle('open'));
+    mobileMenuBtn.addEventListener('mouseenter', openMenu);
+    mobileMenuBtn.addEventListener('mouseleave', closeMenuSoon);
+    mobileNavPanel.addEventListener('mouseenter', openMenu);
+    mobileNavPanel.addEventListener('mouseleave', closeMenuSoon);
 }
 
 // ==================== MODALS ====================
