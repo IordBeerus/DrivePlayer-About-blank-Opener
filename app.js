@@ -2325,21 +2325,43 @@ function playEpisode(tvItem, episode, index) {
     const frame = document.getElementById('playerFrame');
     const title = document.getElementById('playerTitle');
     const subtitle = document.getElementById('playerSubtitle');
+    const nextButton = document.getElementById('playNextEpisode');
     title.textContent = tvItem.title;
     subtitle.textContent = `Season ${tvItem.season || 1} • Episode ${index + 1} - ${episode.name}`;
+    playContext = { item: tvItem, type: 'tv', season: tvItem.season || 1, episode: index + 1 };
     frame.innerHTML = '';
 
+    const playNext = (automatic = false) => {
+        if (automatic && settings.autoPlayNext === false) return;
+        const nextIndex = index + 1;
+        if (nextIndex >= tvItem.episodes.length) return;
+        const nextEpisode = tvItem.episodes[nextIndex];
+        if (nextButton) nextButton.disabled = false;
+        document.querySelectorAll('#episodePlaylist .ep-play-item').forEach((el, i) =>
+            el.classList.toggle('active', i === nextIndex));
+        try { toast(`Playing next: Episode ${nextIndex + 1}`, 'success'); } catch {}
+        playEpisode(tvItem, nextEpisode, nextIndex);
+    };
+
+    if (nextButton) {
+        nextButton.disabled = index + 1 >= tvItem.episodes.length;
+        nextButton.onclick = playNext;
+    }
+
     if (episode.blobUrl) {
-        frame.innerHTML = `<video controls autoplay style="width:100%;height:100%;background:#000;"><source src="${escapeHtml(episode.blobUrl)}" type="${escapeHtml(episode.type || 'video/mp4')}"></video>`;
+        frame.innerHTML = `<video id="driveVideoEl" controls autoplay style="width:100%;height:100%;background:#000;"><source src="${escapeHtml(episode.blobUrl)}" type="${escapeHtml(episode.type || 'video/mp4')}"></video>`;
+        const video = document.getElementById('driveVideoEl');
+        if (video) video.addEventListener('ended', () => playNext(true));
     } else if (episode.driveLink) {
         const driveLink = convertDriveLink(episode.driveLink);
         frame.innerHTML = `<iframe src="${escapeHtml(driveLink)}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
     } else if (episode.url) {
-        const driveLink = convertDriveLink(episode.url);
-        frame.innerHTML = `<iframe src="${escapeHtml(driveLink)}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
+        frame.innerHTML = `<iframe src="${escapeHtml(episode.url)}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
     } else {
         frame.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:18px;">No video source</div>`;
     }
+
+    setTimeout(() => setActiveEpisode(tvItem.season || 1, index + 1, document.getElementById('episodePlaylist')), 80);
 }
 
 // ==================== INFO MODAL ====================

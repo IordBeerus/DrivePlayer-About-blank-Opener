@@ -1915,6 +1915,22 @@ body.light-mode .empty-state-icon svg { fill: #111 !important; }
 }
 .player-placeholder h3 { font-size: 22px; }
 .player-placeholder p { color: #999; font-size: 14px; }
+.play-next-button {
+    position: relative;
+    z-index: 1;
+    border: 1px solid rgba(245, 197, 24, 0.55);
+    border-radius: 6px;
+    padding: 7px 14px;
+    background: #f5c518;
+    color: #111;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.play-next-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
 .server-selector {
     display: flex;
     align-items: center;
